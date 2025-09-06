@@ -1,0 +1,77 @@
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#map {
+  height: 100vh;
+  width: 100vw;
+}
+
+.places-control {
+  background: transparent;
+  padding: 6px;
+  font-family: sans-serif;
+  font-size: 12px;
+  line-height: 1.2;
+  max-width: 200px;
+  color: #000;
+}
+
+.places-control label {
+  background: transparent;
+  display: block;
+  margin-bottom: 2px;
+}
+
+#computeBtn {
+  font-size: 12px;
+  padding: 4px 6px;
+  margin-top: 6px;
+}
+
+#gmapLink {
+  font-size: 12px;
+  display: block;
+  margin-top: 4px;
+}
+
+/* Loader overlay */
+#loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.spinner {
+  border: 6px solid #f3f3f3;
+  border-top: 6px solid #2563eb;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Blue marker override */
+.leaflet-marker-icon.blue-marker {
+  filter: hue-rotate(180deg) saturate(5);
+}
+
