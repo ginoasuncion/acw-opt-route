@@ -4,14 +4,15 @@
   <meta charset="utf-8" />
   <title>Optimal Route Map</title>
   <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
 </head>
 <body>
   <div id="map"></div>
   <div id="loader"><div class="spinner"></div></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <!-- Load Google Maps API -->
+  <script async
+  src="https://maps.googleapis.com/maps/api/js?key=__GOOGLE_MAPS_API_KEY__&callback=initMap">
+</script>
   <script src="sketch.js"></script>
 </body>
 </html>
-

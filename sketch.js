@@ -1,270 +1,224 @@
-// sketch.js
-
 // --- Define places ---
 const places = [
-  {
-    "name": "079 | Stories",
-    "lat": 23.0353928,
-    "lon": 72.4947591
-  },
-  {
-    "name": "Archer Art Gallery",
-    "lat": 23.04166188,
-    "lon": 72.55184877
-  },
-  {
-    "name": "Arthshila Ahmedabad",
-    "lat": 23.029595,
-    "lon": 72.5372661
-  },
-  {
-    "name": "Basera",
-    "lat": 23.03008,
-    "lon": 72.57936
-  },
-  {
-    "name": "Conflictorium",
-    "lat": 23.03534,
-    "lon": 72.58649
-  },
-  {
-    "name": "Darpana Academy",
-    "lat": 23.0477,
-    "lon": 72.57277
-  },
-  {
-    "name": "Hutheesing Visual Art Centre",
-    "lat": 23.03724,
-    "lon": 72.54969
-  },
-  {
-    "name": "Iram Art Gallery",
-    "lat": 23.02874,
-    "lon": 72.49185
-  },
-  {
-    "name": "Kanoria Centre for Arts",
-    "lat": 23.0375,
-    "lon": 72.54908
-  },
-  {
-    "name": "Kasturbhai Lalbhai Museum",
-    "lat": 23.05223,
-    "lon": 72.59307
-  },
-  {
-    "name": "LD Museum Director Bunglow",
-    "lat": 23.03422,
-    "lon": 72.55094
-  },
-  {
-    "name": "Mehnat Manzil: Museum of Work",
-    "lat": 22.99835,
-    "lon": 72.53732
-  },
-  {
-    "name": "Samara Art Gallery",
-    "lat": 23.04347,
-    "lon": 72.55721
-  },
-  {
-    "name": "Shreyas Foundation",
-    "lat": 23.01436,
-    "lon": 72.53993
-  },
-  {
-    "name": "Studio Sangath / Vastushilpa Sangath LLP",
-    "lat": 23.04791,
-    "lon": 72.52645
-  }
+  { name: "079 | Stories", lat: 23.0353928, lon: 72.4947591 },
+  { name: "Archer Art Gallery", lat: 23.04166188, lon: 72.55184877 },
+  { name: "Arthshila Ahmedabad", lat: 23.029595, lon: 72.5372661 },
+  { name: "Basera", lat: 23.03008, lon: 72.57936 },
+  { name: "Conflictorium", lat: 23.03534, lon: 72.58649 },
+  { name: "Darpana Academy", lat: 23.0477, lon: 72.57277 },
+  { name: "Hutheesing Visual Art Centre", lat: 23.03724, lon: 72.54969 },
+  { name: "Iram Art Gallery", lat: 23.02874, lon: 72.49185 },
+  { name: "Kanoria Centre for Arts", lat: 23.0375, lon: 72.54908 },
+  { name: "Kasturbhai Lalbhai Museum", lat: 23.05223, lon: 72.59307 },
+  { name: "LD Museum Director Bunglow", lat: 23.03422, lon: 72.55094 },
+  { name: "Mehnat Manzil: Museum of Work", lat: 22.99835, lon: 72.53732 },
+  { name: "Samara Art Gallery", lat: 23.04347, lon: 72.55721 },
+  { name: "Shreyas Foundation", lat: 23.01436, lon: 72.53993 },
+  { name: "Studio Sangath / Vastushilpa Sangath LLP", lat: 23.04791, lon: 72.52645 }
 ];
 
-// --- Initialize map ---
-const map = L.map("map").setView([23.0353928, 72.4947591], 13);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://www.carto.com/">CARTO</a>',
-  subdomains: "abcd",
-  maxZoom: 20
-}).addTo(map);
-
-// --- Marker styles ---
-function grayIcon() {
-  return L.icon({
-    iconUrl: "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png",
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowUrl: "https://unpkg.com/leaflet@1.9.3/dist/images/marker-shadow.png"
-  });
-}
-
-function blueIcon() {
-  return L.icon({
-    iconUrl: "https://unpkg.com/leaflet@1.9.3/dist/images/marker-icon.png",
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowUrl: "https://unpkg.com/leaflet@1.9.3/dist/images/marker-shadow.png",
-    className: "blue-marker"
-  });
-}
-
-function numberedIcon(num) {
-  return L.divIcon({
-    className: "custom-div-icon",
-    html: `<div style="
-      background:#2563eb;
-      color:#fff;
-      border-radius:50%;
-      width:24px;
-      height:24px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size:12px;
-      font-weight:bold;
-      border:2px solid #fff;
-    ">${num}</div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-    popupAnchor: [0, -12]
-  });
-}
-
-// --- Add markers + sidebar checkboxes ---
+let map, directionsService, directionsRenderer;
 let markers = [];
-let routeLayer = null;
 
-const controlDiv = L.control({ position: "topright" });
-controlDiv.onAdd = function () {
-  const div = L.DomUtil.create("div", "places-control");
-  div.innerHTML = `<div id="placesList"></div>
-    <button id="computeBtn">Compute Route</button>
-    <a id="gmapLink" href="#" target="_blank" style="display:none;">Open in Google Maps</a>`;
-  return div;
-};
-controlDiv.addTo(map);
-
-const placesListDiv = document.getElementById("placesList");
-
-places.forEach((p, i) => {
-  const marker = L.marker([p.lat, p.lon], { icon: grayIcon() })
-    .addTo(map)
-    .bindTooltip(p.name, { permanent: false, direction: "top" });
-
-  markers.push(marker);
-
-  const label = document.createElement("label");
-  const cb = document.createElement("input");
-  cb.type = "checkbox";
-  cb.value = i;
-
-  cb.addEventListener("change", (e) => {
-    if (e.target.checked) {
-      marker.setIcon(blueIcon());
-    } else {
-      marker.setIcon(grayIcon());
-    }
+// --- Initialize map ---
+function initMap() {
+  map = new google.maps.Map(document.getElementById("map"), {
+    zoom: 13,
+    center: { lat: 23.0353928, lng: 72.4947591 }, // temporary center, will adjust
+  gestureHandling: "greedy",
+  mapTypeControl: false,    // ❌ remove Map/Satellite toggle
+  fullscreenControl: false, // ❌ remove fullscreen button
+  streetViewControl: false, // ❌ remove yellow Street View icon
+  zoomControl: false,       // ❌ remove +/− zoom buttons
+    styles: [
+      { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
+      { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+      { elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
+      { elementType: "labels.text.stroke", stylers: [{ color: "#f5f5f5" }] },
+      { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
+      { featureType: "poi", stylers: [{ visibility: "off" }] },
+      { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+      { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
+      { featureType: "transit", stylers: [{ visibility: "off" }] },
+      { featureType: "water", elementType: "geometry", stylers: [{ color: "#c9c9c9" }] }
+    ]
   });
 
-  label.appendChild(cb);
-  label.appendChild(document.createTextNode(" " + p.name));
-  placesListDiv.appendChild(label);
-});
+  directionsService = new google.maps.DirectionsService();
+  directionsRenderer = new google.maps.DirectionsRenderer({
+    map,
+    suppressMarkers: true, // ✅ only custom markers
+    polylineOptions: { strokeColor: "#333333", strokeWeight: 5 }
+  });
 
-// --- Loading spinner ---
-const loader = document.createElement("div");
-loader.id = "loader";
-loader.innerHTML = '<div class="spinner"></div>';
-document.body.appendChild(loader);
+  // Sidebar UI
+  const controlDiv = document.createElement("div");
+  controlDiv.className = "places-control";
+  controlDiv.innerHTML = `
+    <div id="placesList"></div>
+    <button id="computeBtn">Compute Shortest Distance Route</button>
+    <a id="gmapLink" href="#" target="_blank" style="display:none;">Open in Google Maps</a>`;
+  map.controls[google.maps.ControlPosition.RIGHT_TOP].push(controlDiv);
 
-function showLoader(show) {
-  loader.style.display = show ? "flex" : "none";
+  const placesListDiv = controlDiv.querySelector("#placesList");
+
+  // Add markers + checkboxes
+  const bounds = new google.maps.LatLngBounds();
+  places.forEach((p, i) => {
+    const marker = new google.maps.Marker({
+      position: { lat: p.lat, lng: p.lon },
+      map,
+      title: p.name
+    });
+    markers.push(marker);
+    bounds.extend({ lat: p.lat, lng: p.lon });
+
+    const label = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = i;
+    cb.addEventListener("change", (e) => {
+      if (!e.target.checked) marker.setLabel(null);
+    });
+
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(" " + p.name));
+    placesListDiv.appendChild(label);
+  });
+
+  // ✅ Fit bounds & shift left for sidebar
+  map.fitBounds(bounds);
+  map.panBy(-150, 0); // shift map left (~150px) so sidebar doesn’t overlap
+
+  controlDiv.querySelector("#computeBtn").addEventListener("click", computeRouteByDistance);
 }
+window.initMap = initMap;
 
-// --- Fit all markers initially with sidebar padding ---
-const allBounds = places.map((p) => [p.lat, p.lon]);
-map.fitBounds(allBounds, {
-  paddingTopLeft: [20, 20],
-  paddingBottomRight: [300, 20] // shift map left for sidebar on right
-});
-
-// --- Route computation ---
-async function computeRoute() {
+// --- Distance-based route computation ---
+async function computeRouteByDistance() {
   showLoader(true);
-
   const selected = [];
   document.querySelectorAll("#placesList input:checked").forEach((cb) => {
     selected.push(places[parseInt(cb.value)]);
   });
-
   if (selected.length < 2) {
     alert("Select at least 2 places.");
     showLoader(false);
     return;
   }
 
-  // Clear old route
-  if (routeLayer) {
-    map.removeLayer(routeLayer);
-  }
-
-  // Build OSRM request
-  const coords = selected.map((p) => `${p.lon},${p.lat}`).join(";");
-  const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`;
-
   try {
-    const res = await fetch(url);
-    const data = await res.json();
+    const distances = await getDistanceMatrixChunked(selected);
+    const order = tspNearestNeighbor(distances);
+    const orderedPlaces = order.map(i => selected[i]);
 
-    if (!data.routes || data.routes.length === 0) {
-      alert("No route found.");
-      showLoader(false);
-      return;
-    }
+    const origin = { lat: orderedPlaces[0].lat, lng: orderedPlaces[0].lon };
+    const destination = { lat: orderedPlaces.at(-1).lat, lng: orderedPlaces.at(-1).lon };
+    const waypoints = orderedPlaces.slice(1, -1).map(p => ({
+      location: { lat: p.lat, lng: p.lon }, stopover: true
+    }));
 
-    // Draw route
-    routeLayer = L.geoJSON(data.routes[0].geometry, {
-      style: { color: "blue", weight: 4 }
-    }).addTo(map);
+    directionsService.route(
+      { origin, destination, waypoints, optimizeWaypoints: false, travelMode: google.maps.TravelMode.DRIVING },
+      (result, status) => {
+        showLoader(false);
+        if (status === "OK") {
+          directionsRenderer.setDirections(result);
 
-    // Keep markers blue + add numbering
-    selected.forEach((p, i) => {
-      const idx = places.findIndex((pp) => pp.name === p.name);
-      markers[idx].setIcon(numberedIcon(i + 1));
-      markers[idx].bindTooltip(`${i + 1}. ${p.name}`, {
-        permanent: false,
-        direction: "top"
-      });
-    });
+          // Reset markers
+          markers.forEach(m => m.setLabel(null));
+          const infoWindow = new google.maps.InfoWindow();
 
-    // Fit map with sidebar padding
-    const bounds = selected.map((p) => [p.lat, p.lon]);
-    map.fitBounds(bounds, {
-      paddingTopLeft: [20, 20],
-      paddingBottomRight: [300, 20] // keep space for sidebar
-    });
+          // Numbered markers + info window
+          orderedPlaces.forEach((p, num) => {
+            const markerIndex = places.findIndex(pp => pp.name === p.name);
+            markers[markerIndex].setLabel({
+              text: String(num + 1),
+              color: "#fff",
+              fontSize: "12px",
+              fontWeight: "bold"
+            });
+            markers[markerIndex].addListener("click", () => {
+              infoWindow.setContent(`<strong>${num + 1}. ${p.name}</strong>`);
+              infoWindow.open(map, markers[markerIndex]);
+            });
+          });
 
-    // Google Maps link (show only after route computed)
-    const origin = `${selected[0].lat},${selected[0].lon}`;
-    const destination = `${selected[selected.length - 1].lat},${selected[selected.length - 1].lon}`;
-    const waypoints = selected.slice(1, -1).map((p) => `${p.lat},${p.lon}`).join("|");
+          // Google Maps link
+          const originStr = `${orderedPlaces[0].lat},${orderedPlaces[0].lon}`;
+          const destStr = `${orderedPlaces.at(-1).lat},${orderedPlaces.at(-1).lon}`;
+          const waypointsStr = orderedPlaces.slice(1, -1).map(p => `${p.lat},${p.lon}`).join("|");
+          let gmapUrl = `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destStr}`;
+          if (waypointsStr) gmapUrl += `&waypoints=${waypointsStr}`;
+          gmapUrl += "&travelmode=driving";
+          const gmapLink = document.getElementById("gmapLink");
+          gmapLink.href = gmapUrl;
+          gmapLink.style.display = "block";
 
-    let gmapUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`;
-    if (waypoints) gmapUrl += `&waypoints=${waypoints}`;
-    gmapUrl += "&travelmode=driving";
-
-    const gmapLink = document.getElementById("gmapLink");
-    gmapLink.href = gmapUrl;
-    gmapLink.style.display = "block"; // only show now
+          // Fit bounds again after route
+          const bounds = new google.maps.LatLngBounds();
+          orderedPlaces.forEach(p => bounds.extend({ lat: p.lat, lng: p.lon }));
+          map.fitBounds(bounds);
+          map.panBy(-150, 0); // shift left for sidebar
+        } else alert("Directions request failed: " + status);
+      }
+    );
   } catch (err) {
-    console.error(err);
-    alert("Error fetching route.");
+    showLoader(false);
+    alert("Error building distance matrix: " + err);
   }
-
-  showLoader(false);
 }
 
-document.getElementById("computeBtn").addEventListener("click", computeRoute);
+// --- Distance Matrix in chunks ---
+async function getDistanceMatrixChunked(selected) {
+  const service = new google.maps.DistanceMatrixService();
+  const n = selected.length;
+  let matrix = Array.from({ length: n }, () => new Array(n).fill(Infinity));
 
+  for (let i = 0; i < n; i++) {
+    const origins = [{ lat: selected[i].lat, lng: selected[i].lon }];
+    const destinations = selected.map(p => ({ lat: p.lat, lng: p.lon }));
+
+    await new Promise((resolve, reject) => {
+      service.getDistanceMatrix(
+        { origins, destinations, travelMode: google.maps.TravelMode.DRIVING },
+        (res, status) => {
+          if (status === "OK") {
+            res.rows[0].elements.forEach((el, j) => {
+              matrix[i][j] = el.status === "OK" ? el.distance.value : Infinity;
+            });
+            resolve();
+          } else reject(status);
+        }
+      );
+    });
+  }
+  return matrix;
+}
+
+// --- Nearest-neighbor heuristic ---
+function tspNearestNeighbor(distMatrix) {
+  const n = distMatrix.length;
+  const visited = new Array(n).fill(false);
+  let order = [0];
+  visited[0] = true;
+  for (let i = 1; i < n; i++) {
+    let last = order[order.length - 1];
+    let next = -1;
+    let minDist = Infinity;
+    for (let j = 0; j < n; j++) {
+      if (!visited[j] && distMatrix[last][j] < minDist) {
+        minDist = distMatrix[last][j];
+        next = j;
+      }
+    }
+    order.push(next);
+    visited[next] = true;
+  }
+  return order;
+}
+
+// --- Loader ---
+function showLoader(show) {
+  document.getElementById("loader").style.display = show ? "flex" : "none";
+}
