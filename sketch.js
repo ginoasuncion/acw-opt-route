@@ -26,22 +26,10 @@ function initMap() {
     zoom: 13,
     center: { lat: 23.0353928, lng: 72.4947591 }, // temporary center, will adjust
   gestureHandling: "greedy",
-  mapTypeControl: false,    // ❌ remove Map/Satellite toggle
-  fullscreenControl: false, // ❌ remove fullscreen button
-  streetViewControl: false, // ❌ remove yellow Street View icon
-  zoomControl: false,       // ❌ remove +/− zoom buttons
-    styles: [
-      { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
-      { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-      { elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-      { elementType: "labels.text.stroke", stylers: [{ color: "#f5f5f5" }] },
-      { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
-      { featureType: "poi", stylers: [{ visibility: "off" }] },
-      { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-      { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
-      { featureType: "transit", stylers: [{ visibility: "off" }] },
-      { featureType: "water", elementType: "geometry", stylers: [{ color: "#c9c9c9" }] }
-    ]
+  mapTypeControl: false,
+  fullscreenControl: false,
+  streetViewControl: false,
+  mapId: "ceb937821bc6d1ab66996a44"
   });
 
   directionsService = new google.maps.DirectionsService();
@@ -222,3 +210,4 @@ function tspNearestNeighbor(distMatrix) {
 function showLoader(show) {
   document.getElementById("loader").style.display = show ? "flex" : "none";
 }
+
