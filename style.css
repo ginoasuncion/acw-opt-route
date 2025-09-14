@@ -2,6 +2,7 @@ html, body {
   height: 100%;
   margin: 0;
   padding: 0;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 #map {
@@ -10,32 +11,56 @@ html, body {
 }
 
 .places-control {
-  background: #fff;
-  padding: 6px;
-  font-family: sans-serif;
-  font-size: 12px;
-  line-height: 1.2;
-  max-width: 220px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  background: #ffffff;
+  padding: 16px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: #333;
+  margin: 10px;
 }
 
 .places-control label {
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: 8px;
+  cursor: pointer;
 }
 
-#computeBtn {
-  font-size: 12px;
-  padding: 4px 6px;
-  margin-top: 6px;
+.places-control button {
+  display: block;
+  width: 100%;
+  background: #333;
+  color: #fff;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
 }
 
-#gmapLink {
+.places-control button:hover {
+  background: #555;
+}
+
+#gmapLink,
+#copyLink {
   font-size: 12px;
   display: block;
-  margin-top: 4px;
+  margin-top: 6px;
   color: #2563eb;
   text-decoration: none;
+  cursor: pointer;
+}
+
+#gmapLink:hover,
+#copyLink:hover {
+  text-decoration: underline;
 }
 
 /* Loader overlay */
@@ -64,50 +89,5 @@ html, body {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
-}
-
-.places-control {
-  background: #ffffff;
-  padding: 16px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  border-radius: 8px;
-  font-family: "Inter", sans-serif;
-  font-size: 14px;
-  color: #333;
-  margin: 10px;
-}
-
-.places-control label {
-  display: block;
-  margin-bottom: 8px;
-  cursor: pointer;
-}
-
-.places-control button {
-  display: block;
-  width: 100%;
-  background: #333;
-  color: #fff;
-  padding: 10px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  margin-top: 12px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.places-control button:hover {
-  background: #555;
-}
-
-.places-control a {
-  display: block;
-  margin-top: 10px;
-  font-size: 13px;
-  color: #2563eb;
-  text-decoration: none;
 }
 

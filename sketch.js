@@ -24,19 +24,21 @@ let markers = [];
 function initMap() {
   map = new google.maps.Map(document.getElementById("map"), {
     zoom: 13,
-    center: { lat: 23.0353928, lng: 72.4947591 }, // temporary center, will adjust
-  gestureHandling: "greedy",
-  mapTypeControl: false,
-  fullscreenControl: false,
-  streetViewControl: false,
-  mapId: "ceb937821bc6d1ab66996a44"
+    center: { lat: 23.0353928, lng: 72.4947591 },
+    gestureHandling: "greedy",
+    mapTypeControl: false,
+    fullscreenControl: false,
+    streetViewControl: false,
+    zoomControl: false,
+    // ✅ If you have a Map ID with custom styling, add here:
+    mapId: "ceb937821bc6d1ab66996a44"
   });
 
   directionsService = new google.maps.DirectionsService();
   directionsRenderer = new google.maps.DirectionsRenderer({
     map,
-    suppressMarkers: true, // ✅ only custom markers
-    polylineOptions: { strokeColor: "#333333", strokeWeight: 5 }
+    suppressMarkers: true,
+    polylineOptions: { strokeColor: "#9D2C21", strokeWeight: 5 }
   });
 
   // Sidebar UI
@@ -44,8 +46,10 @@ function initMap() {
   controlDiv.className = "places-control";
   controlDiv.innerHTML = `
     <div id="placesList"></div>
-    <button id="computeBtn">Compute Shortest Distance Route</button>
-    <a id="gmapLink" href="#" target="_blank" style="display:none;">Open in Google Maps</a>`;
+    <button id="computeBtn">Curate Route</button>
+    <a id="gmapLink" href="#" target="_blank" style="display:none;">Open in Google Maps</a>
+    <a id="copyLink" href="#" style="display:none;">Copy Route Link</a>
+  `;
   map.controls[google.maps.ControlPosition.RIGHT_TOP].push(controlDiv);
 
   const placesListDiv = controlDiv.querySelector("#placesList");
@@ -74,9 +78,9 @@ function initMap() {
     placesListDiv.appendChild(label);
   });
 
-  // ✅ Fit bounds & shift left for sidebar
+  // Fit bounds & shift left for sidebar
   map.fitBounds(bounds);
-  map.panBy(-150, 0); // shift map left (~150px) so sidebar doesn’t overlap
+  map.panBy(-150, 0);
 
   controlDiv.querySelector("#computeBtn").addEventListener("click", computeRouteByDistance);
 }
@@ -139,15 +143,27 @@ async function computeRouteByDistance() {
           let gmapUrl = `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destStr}`;
           if (waypointsStr) gmapUrl += `&waypoints=${waypointsStr}`;
           gmapUrl += "&travelmode=driving";
+
           const gmapLink = document.getElementById("gmapLink");
           gmapLink.href = gmapUrl;
           gmapLink.style.display = "block";
+
+          // ✅ Copy link button
+          const copyLink = document.getElementById("copyLink");
+          copyLink.style.display = "block";
+          copyLink.onclick = (e) => {
+            e.preventDefault();
+            navigator.clipboard.writeText(gmapUrl).then(() => {
+              copyLink.textContent = "Copied!";
+              setTimeout(() => (copyLink.textContent = "Copy Route Link"), 1500);
+            });
+          };
 
           // Fit bounds again after route
           const bounds = new google.maps.LatLngBounds();
           orderedPlaces.forEach(p => bounds.extend({ lat: p.lat, lng: p.lon }));
           map.fitBounds(bounds);
-          map.panBy(-150, 0); // shift left for sidebar
+          map.panBy(-150, 0);
         } else alert("Directions request failed: " + status);
       }
     );
