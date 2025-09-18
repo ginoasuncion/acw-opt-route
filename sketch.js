@@ -19,19 +19,59 @@ const places = [
 
 let map, directionsService, directionsRenderer;
 let markers = [];
+let hasExpanded = false;
+let activeBounds = null; // ✅ dynamic bounds
+
+// --- Sidebar width helper ---
+function getSidebarWidth() {
+  const sidebar = document.querySelector(".sidebar-wrapper");
+  return sidebar ? sidebar.offsetWidth : window.innerWidth / 2;
+}
+
+// --- Helper: Fit bounds with left shift (desktop) ---
+function fitBoundsLeft(bounds) {
+  map.fitBounds(bounds, {
+    top: 50,
+    bottom: 50,
+    left: 50,
+    right: getSidebarWidth() + 50
+  });
+}
+
+// --- Helper: Fit bounds centered (mobile bottom sheet) ---
+function fitBoundsCentered(bounds) {
+  map.fitBounds(bounds, {
+    top: 50,
+    bottom: 300, // ✅ leave space for bottom sheet
+    left: 50,
+    right: 50
+  });
+}
+
+// --- Unified Fit Bounds ---
+function fitBoundsResponsive(bounds) {
+  if (window.innerWidth <= 800) {
+    fitBoundsCentered(bounds); // ✅ mobile → centered
+  } else {
+    fitBoundsLeft(bounds); // ✅ desktop → left shifted
+  }
+}
 
 // --- Initialize map ---
 function initMap() {
   map = new google.maps.Map(document.getElementById("map"), {
-    zoom: 13,
+    zoom: 1,
     center: { lat: 23.0353928, lng: 72.4947591 },
     gestureHandling: "greedy",
     mapTypeControl: false,
     fullscreenControl: false,
     streetViewControl: false,
     zoomControl: false,
-    // ✅ If you have a Map ID with custom styling, add here:
-    mapId: "ceb937821bc6d1ab66996a44"
+    panControl: false,
+    rotateControl: false,
+    scaleControl: false,
+    keyboardShortcuts: false,
+    mapId: "ceb937821bc6d1ab66996a44",
   });
 
   directionsService = new google.maps.DirectionsService();
@@ -46,16 +86,22 @@ function initMap() {
   controlDiv.className = "places-control";
   controlDiv.innerHTML = `
     <div id="placesList"></div>
-    <button id="computeBtn">Curate Route</button>
-    <a id="gmapLink" href="#" target="_blank" style="display:none;">Open in Google Maps</a>
-    <a id="copyLink" href="#" style="display:none;">Copy Route Link</a>
-  `;
-  map.controls[google.maps.ControlPosition.RIGHT_TOP].push(controlDiv);
+    <div class="panel-footer">
+      <button id="computeBtn">COMPUTE ROUTE</button>
+      <div class="footer-links">
+        <a id="gmapLink" href="#" target="_blank"><span>OPEN IN GOOGLE MAPS</span></a>
+        <a id="copyLink" href="#"><span>COPY LINK</span></a>
+      </div>
+    </div>`;
+
+  const wrapperDiv = document.createElement("div");
+  wrapperDiv.className = "sidebar-wrapper";
+  wrapperDiv.appendChild(controlDiv);
+  document.body.appendChild(wrapperDiv);
 
   const placesListDiv = controlDiv.querySelector("#placesList");
 
   // Add markers + checkboxes
-  const bounds = new google.maps.LatLngBounds();
   places.forEach((p, i) => {
     const marker = new google.maps.Marker({
       position: { lat: p.lat, lng: p.lon },
@@ -63,7 +109,6 @@ function initMap() {
       title: p.name
     });
     markers.push(marker);
-    bounds.extend({ lat: p.lat, lng: p.lon });
 
     const label = document.createElement("label");
     const cb = document.createElement("input");
@@ -78,100 +123,50 @@ function initMap() {
     placesListDiv.appendChild(label);
   });
 
-  // Fit bounds & shift left for sidebar
-  map.fitBounds(bounds);
-  map.panBy(-150, 0);
+  // ✅ Fit all markers initially (responsive)
+  const bounds = new google.maps.LatLngBounds();
+  places.forEach((p) => bounds.extend({ lat: p.lat, lng: p.lon }));
+  fitBoundsResponsive(bounds);
+  activeBounds = bounds;
 
-  controlDiv.querySelector("#computeBtn").addEventListener("click", computeRouteByDistance);
+  // Footer actions
+  const computeBtn = controlDiv.querySelector("#computeBtn");
+  const copyLink = controlDiv.querySelector("#copyLink");
+  const gmapLink = controlDiv.querySelector("#gmapLink");
+  const footer = controlDiv.querySelector(".panel-footer");
+
+  computeBtn.addEventListener("click", async () => {
+    await computeRouteByDistance();
+
+    if (!hasExpanded) {
+      footer.classList.add("computed");
+      hasExpanded = true;
+    }
+  });
+
+  copyLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (gmapLink.href && gmapLink.href !== "#") {
+      navigator.clipboard.writeText(gmapLink.href).then(() => {
+        alert("Route link copied!");
+      });
+    } else {
+      alert("No route to copy yet.");
+    }
+  });
+
+  // ✅ Reapply padding on resize
+  window.addEventListener("resize", () => {
+    if (activeBounds) fitBoundsResponsive(activeBounds);
+  });
+
+  // ✅ Keep markers visible correctly
+  map.addListener("idle", () => {
+    if (activeBounds) fitBoundsResponsive(activeBounds);
+  });
 }
 window.initMap = initMap;
 
-// --- Distance-based route computation ---
-async function computeRouteByDistance() {
-  showLoader(true);
-  const selected = [];
-  document.querySelectorAll("#placesList input:checked").forEach((cb) => {
-    selected.push(places[parseInt(cb.value)]);
-  });
-  if (selected.length < 2) {
-    alert("Select at least 2 places.");
-    showLoader(false);
-    return;
-  }
-
-  try {
-    const distances = await getDistanceMatrixChunked(selected);
-    const order = tspNearestNeighbor(distances);
-    const orderedPlaces = order.map(i => selected[i]);
-
-    const origin = { lat: orderedPlaces[0].lat, lng: orderedPlaces[0].lon };
-    const destination = { lat: orderedPlaces.at(-1).lat, lng: orderedPlaces.at(-1).lon };
-    const waypoints = orderedPlaces.slice(1, -1).map(p => ({
-      location: { lat: p.lat, lng: p.lon }, stopover: true
-    }));
-
-    directionsService.route(
-      { origin, destination, waypoints, optimizeWaypoints: false, travelMode: google.maps.TravelMode.DRIVING },
-      (result, status) => {
-        showLoader(false);
-        if (status === "OK") {
-          directionsRenderer.setDirections(result);
-
-          // Reset markers
-          markers.forEach(m => m.setLabel(null));
-          const infoWindow = new google.maps.InfoWindow();
-
-          // Numbered markers + info window
-          orderedPlaces.forEach((p, num) => {
-            const markerIndex = places.findIndex(pp => pp.name === p.name);
-            markers[markerIndex].setLabel({
-              text: String(num + 1),
-              color: "#fff",
-              fontSize: "12px",
-              fontWeight: "bold"
-            });
-            markers[markerIndex].addListener("click", () => {
-              infoWindow.setContent(`<strong>${num + 1}. ${p.name}</strong>`);
-              infoWindow.open(map, markers[markerIndex]);
-            });
-          });
-
-          // Google Maps link
-          const originStr = `${orderedPlaces[0].lat},${orderedPlaces[0].lon}`;
-          const destStr = `${orderedPlaces.at(-1).lat},${orderedPlaces.at(-1).lon}`;
-          const waypointsStr = orderedPlaces.slice(1, -1).map(p => `${p.lat},${p.lon}`).join("|");
-          let gmapUrl = `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destStr}`;
-          if (waypointsStr) gmapUrl += `&waypoints=${waypointsStr}`;
-          gmapUrl += "&travelmode=driving";
-
-          const gmapLink = document.getElementById("gmapLink");
-          gmapLink.href = gmapUrl;
-          gmapLink.style.display = "block";
-
-          // ✅ Copy link button
-          const copyLink = document.getElementById("copyLink");
-          copyLink.style.display = "block";
-          copyLink.onclick = (e) => {
-            e.preventDefault();
-            navigator.clipboard.writeText(gmapUrl).then(() => {
-              copyLink.textContent = "Copied!";
-              setTimeout(() => (copyLink.textContent = "Copy Route Link"), 1500);
-            });
-          };
-
-          // Fit bounds again after route
-          const bounds = new google.maps.LatLngBounds();
-          orderedPlaces.forEach(p => bounds.extend({ lat: p.lat, lng: p.lon }));
-          map.fitBounds(bounds);
-          map.panBy(-150, 0);
-        } else alert("Directions request failed: " + status);
-      }
-    );
-  } catch (err) {
-    showLoader(false);
-    alert("Error building distance matrix: " + err);
-  }
-}
 
 // --- Distance Matrix in chunks ---
 async function getDistanceMatrixChunked(selected) {
@@ -222,8 +217,88 @@ function tspNearestNeighbor(distMatrix) {
   return order;
 }
 
+// --- Distance-based route computation ---
+async function computeRouteByDistance() {
+  showLoader(true);
+  const selected = [];
+  document.querySelectorAll("#placesList input:checked").forEach((cb) => {
+    selected.push(places[parseInt(cb.value)]);
+  });
+  if (selected.length < 2) {
+    alert("Select at least 2 places.");
+    showLoader(false);
+    return;
+  }
+
+  try {
+    const distances = await getDistanceMatrixChunked(selected);
+    const order = tspNearestNeighbor(distances);
+    const orderedPlaces = order.map(i => selected[i]);
+
+    const origin = { lat: orderedPlaces[0].lat, lng: orderedPlaces[0].lon };
+    const destination = { lat: orderedPlaces.at(-1).lat, lng: orderedPlaces.at(-1).lon };
+    const waypoints = orderedPlaces.slice(1, -1).map(p => ({
+      location: { lat: p.lat, lng: p.lon }, stopover: true
+    }));
+
+    directionsService.route(
+      { origin, destination, waypoints, optimizeWaypoints: false, travelMode: google.maps.TravelMode.DRIVING },
+      (result, status) => {
+        showLoader(false);
+        if (status === "OK") {
+          directionsRenderer.setDirections(result);
+
+          // Reset markers
+          markers.forEach(m => m.setLabel(null));
+
+          // Numbered markers with inline text (number + name)
+          orderedPlaces.forEach((p, num) => {
+            const markerIndex = places.findIndex(pp => pp.name === p.name);
+
+            markers[markerIndex].setLabel({
+              text: `${num + 1}. ${p.name}`,   // ✅ inline label
+              color: "#fff",
+              fontSize: "12px",
+              fontWeight: "bold"
+            });
+
+            // Optional click popup (just for clarity)
+            markers[markerIndex].addListener("click", () => {
+              const infoWindow = new google.maps.InfoWindow({
+                content: `<strong>${num + 1}. ${p.name}</strong>`
+              });
+              infoWindow.open(map, markers[markerIndex]);
+            });
+          });
+
+          // ✅ Update bounds only to selected markers (responsive)
+          const bounds = new google.maps.LatLngBounds();
+          orderedPlaces.forEach((p) => bounds.extend({ lat: p.lat, lng: p.lon }));
+          activeBounds = bounds;
+          fitBoundsResponsive(activeBounds);
+
+          // Google Maps link
+          const originStr = `${orderedPlaces[0].lat},${orderedPlaces[0].lon}`;
+          const destStr = `${orderedPlaces.at(-1).lat},${orderedPlaces.at(-1).lon}`;
+          const waypointsStr = orderedPlaces.slice(1, -1).map(p => `${p.lat},${p.lon}`).join("|");
+          let gmapUrl = `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destStr}`;
+          if (waypointsStr) gmapUrl += `&waypoints=${waypointsStr}`;
+          gmapUrl += "&travelmode=driving";
+
+          const gmapLink = document.getElementById("gmapLink");
+          gmapLink.href = gmapUrl;
+          gmapLink.style.display = "inline-flex";
+
+        } else alert("Directions request failed: " + status);
+      }
+    );
+  } catch (err) {
+    showLoader(false);
+    alert("Error building distance matrix: " + err);
+  }
+}
+
 // --- Loader ---
 function showLoader(show) {
   document.getElementById("loader").style.display = show ? "flex" : "none";
 }
-
