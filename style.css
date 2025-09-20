@@ -53,21 +53,25 @@ html, body {
   padding: 6px 10px; overflow-y: auto; margin-top: 18px;
 }
 
+/* WEB (desktop/default) specs:
+   - checkbox: 22.5 x 22.5
+   - places font size: 20px (medium)
+*/
 .places-control label {
   display: flex; align-items: center; gap: 8px; cursor: pointer;
-  font-size: 14px; line-height: 20px;
+  font-size: 20px; font-weight: 500; line-height: 26px;
   padding: 3px 5px; border-radius: 4px;
 }
 
 .places-control input[type="checkbox"] {
-  appearance: none; width: 16px; height: 16px; flex-shrink: 0;
+  appearance: none; width: 22.5px; height: 22.5px; flex-shrink: 0;
   border: 2px solid #fff; background: #000; margin-right: 6px; position: relative;
 }
 .places-control input[type="checkbox"]:checked { background: #fff; border-color: #fff; }
 .places-control input[type="checkbox"]:checked::after {
   content: ""; position: absolute; top: 50%; left: 50%;
-  width: 4px; height: 8px; transform: translate(-50%,-50%) rotate(45deg);
-  border: solid #000; border-width: 0 2px 2px 0;
+  width: 6px; height: 12px; transform: translate(-50%,-55%) rotate(45deg);
+  border: solid #000; border-width: 0 3px 3px 0;
 }
 
 /* ===== Footer default ===== */
@@ -80,9 +84,10 @@ html, body {
   transition: all 0.35s ease-in-out;
 }
 
+/* WEB: compute route font size 18px (medium) */
 #computeBtn {
   background: #18467D; color: #fff;
-  font-weight: 500; font-size: 14px; text-transform: uppercase;
+  font-weight: 500; font-size: 18px; text-transform: uppercase;
   height: 36px; line-height: 36px;
   border: none; border-radius: 20px; cursor: pointer;
   width: 100%; padding: 0;
@@ -106,7 +111,7 @@ html, body {
   min-height: 90px;
 }
 .panel-footer.computed #computeBtn {
-  height: 36px !important; line-height: 36px !important; font-size: 14px !important;
+  height: 36px !important; line-height: 36px !important; font-size: 18px !important;
   border-radius: 20px;
 }
 .panel-footer.computed .footer-links {
@@ -114,19 +119,31 @@ html, body {
   align-items: flex-start; justify-content: flex-start;
   max-width: 240px; opacity: 1;
 }
+
+/* WEB: link font size 20px (medium) + layout tweaks */
 .panel-footer.computed .footer-links a {
-  color: #fff; font-size: 0.9rem; font-weight: 500; text-transform: uppercase;
-  display: inline-flex; align-items: center; gap: 6px; line-height: 1.3; text-decoration: none;
+  color: #fff; font-size: 20px; font-weight: 500; text-transform: uppercase;
+  display: inline-flex; align-items: center;
+  gap: 16px;                      /* gap between text and icon */
+  line-height: 1.3; text-decoration: none;
 }
-.panel-footer.computed .footer-links a span { border-bottom: 1px solid #fff; padding-bottom: .1rem; }
+
+/* Underline sits closer to the text label */
+.panel-footer.computed .footer-links a span {
+  display: inline-block;          /* underline hugs just the text */
+  border-bottom: 1px solid #fff;
+  padding-bottom: 2;              /* tighter underline */
+  
+}
 .panel-footer.computed .footer-links a:hover span { border-bottom-color: #00BFFF; }
 
-/* Icons */
+/* Icons (WEB & <600): fixed 20 x 20) */
 .panel-footer.computed .footer-links a[id="gmapLink"]::after,
 .panel-footer.computed .footer-links a[id="copyLink"]::after {
-  content: ""; width: 12px; height: 12px; background-size: contain; background-repeat: no-repeat; display: inline-block;
+  content: ""; width: 20px; height: 20px;
+  background-size: contain; background-repeat: no-repeat; display: inline-block;
 }
-.panel-footer.computed .footer-links a[id="gmapLink"]::after { background-image: url('Hyperlink arrow.svg'); }
+.panel-footer.computed .footer-links a[id="gmapLink"]::after { background-image: url('Arrow.svg'); }
 .panel-footer.computed .footer-links a[id="copyLink"]::after { background-image: url('Vector.svg'); }
 
 /* ===== Responsive gaps ===== */
@@ -153,17 +170,32 @@ html, body {
   }
 }
 
-/* ===== Tiny mobile bottom-sheet: ≤328px ===== */
+/* ===== Tiny mobile bottom-sheet: ≤600px =====
+   - checkbox: 18 x 18
+   - places font size: 16px (medium)
+   - compute route font size: 14px (medium)
+   - link font size: 16px (medium)
+   - icons: 20 x 20
+*/
 @media (max-width: 600px) {
   .sidebar-wrapper {
     left: 0; right: 0; bottom: 0; top: auto;
     width: 100%; height: 45vh; margin: 0;
   }
+
   .places-control { grid-template-rows: 1fr auto; font-size: 13px; }
-  .places-control label { font-size: 13px; line-height: 18px; }
-  .places-control input[type="checkbox"] { width: 14px; height: 14px; }
+  .places-control label { font-size: 16px; font-weight: 500; line-height: 22px; }
+  .places-control input[type="checkbox"] { width: 18px; height: 18px; }
+
   .panel-footer { min-height: 60px !important; }
   .panel-footer.computed { --stack-max: 280px; }
+
+  /* compute route text */
+  #computeBtn,
+  .panel-footer.computed #computeBtn { font-size: 14px !important; }
+
+  /* link text + keep 16px gap on mobile */
+  .panel-footer.computed .footer-links a { font-size: 16px; gap: 16px; }
 }
 
 /* ===== Safety: avoid overflow on long link text ===== */
@@ -180,5 +212,5 @@ html, body {
 
 /* Hide Google UI controls */
 .gm-style .gm-control-active { display: none !important; }
-.gm-style-cc {right: 12px !important; }
-.gm-style, .gm-style div, .gm-style span, .gm-style label {font-family: 'JetBrains Mono', monospace !important; }
+.gm-style-cc { right: 12px !important; }
+.gm-style, .gm-style div, .gm-style span, .gm-style label { font-family: 'JetBrains Mono', monospace !important; }

@@ -258,7 +258,7 @@ function initMap() {
     <div class="panel-footer">
       <button id="computeBtn">COMPUTE ROUTE</button>
       <div class="footer-links">
-        <a id="gmapLink" href="#" target="_blank"><span>OPEN IN GOOGLE MAPS</span></a>
+        <a id="gmapLink" href="#" target="_blank"><span>GOOGLE MAPS</span></a>
         <a id="copyLink" href="#"><span>COPY LINK</span></a>
       </div>
     </div>`;
