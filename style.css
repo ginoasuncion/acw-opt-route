@@ -99,45 +99,52 @@ html, body {
 /* Hidden initially */
 .footer-links { display: none; opacity: 0; transition: opacity .35s ease-in-out; }
 
-/* ===== Footer after compute (desktop / wide) ===== */
+/* ===== Footer after compute ===== */
 .panel-footer.computed {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(200px, auto);
-  justify-content: space-between;
-  align-items: start;
-  width: 100%;
   gap: clamp(10px, 3vw, 30px);
+  align-items: stretch; /* let items fill their columns */
+  width: 100%;
   padding: 12px;
   min-height: 90px;
 }
+
+/* Equal halves on desktop */
+@media (min-width: 901px) {
+  .panel-footer.computed { grid-template-columns: 1fr 1fr; }
+}
+
 .panel-footer.computed #computeBtn {
   height: 36px !important; line-height: 36px !important; font-size: 18px !important;
   border-radius: 20px;
+  width: 100%;
+  justify-self: stretch;
+  box-sizing: border-box;
 }
+
 .panel-footer.computed .footer-links {
   display: flex; flex-direction: column; gap: 8px;
   align-items: flex-start; justify-content: flex-start;
-  max-width: 240px; opacity: 1;
+  max-width: none; /* allow full 50% column */
+  opacity: 1;
 }
 
-/* WEB: link font size 20px (medium) + layout tweaks */
+/* Links: font + underline + icon spacing */
 .panel-footer.computed .footer-links a {
   color: #fff; font-size: 20px; font-weight: 500; text-transform: uppercase;
   display: inline-flex; align-items: center;
-  gap: 16px;                      /* gap between text and icon */
+  gap: 16px;                /* text–icon gap */
   line-height: 1.3; text-decoration: none;
 }
-
-/* Underline sits closer to the text label */
 .panel-footer.computed .footer-links a span {
-  display: inline-block;          /* underline hugs just the text */
-  border-bottom: 1px solid #fff;
-  padding-bottom: 2;              /* tighter underline */
-  
+  display: inline-block;
+  border-bottom: 1px solid #fff; /* underline closer to text */
+  padding-bottom: 0;
+  line-height: 1.05;
 }
 .panel-footer.computed .footer-links a:hover span { border-bottom-color: #00BFFF; }
 
-/* Icons (WEB & <600): fixed 20 x 20) */
+/* Icons fixed 20x20 */
 .panel-footer.computed .footer-links a[id="gmapLink"]::after,
 .panel-footer.computed .footer-links a[id="copyLink"]::after {
   content: ""; width: 20px; height: 20px;
@@ -150,7 +157,7 @@ html, body {
 @media (max-width: 1200px) { .panel-footer.computed { gap: clamp(8px, 3vw, 20px); } }
 @media (max-width: 800px)  { .panel-footer.computed { gap: clamp(6px, 3vw, 14px); } }
 
-/* ===== STACKED = Center-aligned when vertical ===== */
+/* ===== STACKED (≤900px): center-aligned ===== */
 @media (max-width: 900px) {
   .panel-footer.computed { --stack-max: 340px; }
   .panel-footer.computed {
