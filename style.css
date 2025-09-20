@@ -123,7 +123,7 @@ html, body {
 }
 
 .panel-footer.computed .footer-links {
-  display: flex; flex-direction: column; gap: 8px;
+  display: flex; flex-direction: column; gap: 16px;
   align-items: flex-start; justify-content: flex-start;
   max-width: none; /* allow full 50% column */
   opacity: 1;
