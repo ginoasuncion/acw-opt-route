@@ -33,7 +33,7 @@ html, body {
 /* ===== Sidebar wrapper ===== */
 .sidebar-wrapper {
   position: absolute;
-  top: 12px; bottom: 12px; right: 12px;
+  top: 12px; bottom: 15px; right: 12px;
   left: calc(((100% - 40px) / 4) * 2 + 28px);
   width: calc(((100% - 40px) / 4) * 2);
   z-index: 1500;
@@ -180,5 +180,5 @@ html, body {
 
 /* Hide Google UI controls */
 .gm-style .gm-control-active { display: none !important; }
-.gm-style-cc { right: 12px !important; }
-.gm-style, .gm-style div, .gm-style span, .gm-style label { font-family: 'JetBrains Mono', monospace !important; }
+.gm-style-cc {right: 12px !important; }
+.gm-style, .gm-style div, .gm-style span, .gm-style label {font-family: 'JetBrains Mono', monospace !important; }
