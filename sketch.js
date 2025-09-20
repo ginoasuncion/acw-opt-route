@@ -87,13 +87,13 @@ function fitBoundsCentered(bounds) {
 }
 
 function fitBoundsResponsive(bounds) {
-  if (window.innerWidth <= 800) fitBoundsCentered(bounds);
+  if (window.innerWidth <= 328) fitBoundsCentered(bounds);
   else fitBoundsLeft(bounds);
 }
 
 function applyResponsivePadding() {
   const padding =
-    window.innerWidth <= 800
+    window.innerWidth <= 328
       ? { top: 50, bottom: 300, left: 50, right: 50 }
       : { top: 50, bottom: 50, left: 50, right: getSidebarWidth() + 50 };
   map.setOptions({ padding });
