@@ -1,3 +1,13 @@
+// sketch.js — route/marker bounds chooser ("min" or "max") + buffer,
+// and Google Maps links that show official place names via googleMapsPlaceId
+// NOTE: You do NOT need the client Places library for IDs now.
+// Make sure your HTML includes a meta with your key, or the Maps script with ?key=...
+//   <meta name="google-maps-api-key" content="YOUR_API_KEY">
+
+// --- Config: bounds choice + buffer ---
+const BOUNDS_MODE = 'min';      // 'min' = tighter of route vs markers; 'max' = larger (union)
+const BOUNDS_BUFFER_M = 600;    // extra padding in meters added to chosen bounds
+
 // --- Define places ---
 const places = [
   { name: "079 | Stories", lat: 23.0353928, lon: 72.4947591 },
@@ -17,18 +27,47 @@ const places = [
   { name: "Studio Sangath / Vastushilpa Sangath LLP", lat: 23.04791, lon: 72.52645 }
 ];
 
-let map, directionsService, directionsRenderer;
+let map, directionsService, directionsRenderer; // ⬅️ no placesService needed
 let markers = [];
 let hasExpanded = false;
-let activeBounds = null; // ✅ dynamic bounds
+let activeBounds = null;
 
-// --- Sidebar width helper ---
-function getSidebarWidth() {
-  const sidebar = document.querySelector(".sidebar-wrapper");
-  return sidebar ? sidebar.offsetWidth : window.innerWidth / 2;
+// Fit control flags
+let didInitialFit = false;
+let didRouteFit = false;
+
+// Track last computed selection (to decide whether to refit/zoom)
+let lastSelectionKey = null;
+
+/* ---------------- Helpers: API key (lazy) ---------------- */
+function getApiKey() {
+  // Prefer meta tag
+  const meta = document.querySelector('meta[name="google-maps-api-key"]');
+  if (meta?.content) return meta.content.trim();
+
+  // Fallback: window global if you set it
+  if (window.__GMAPS_API_KEY) return String(window.__GMAPS_API_KEY).trim();
+
+  // Last resort: scan the Maps script URL
+  const scripts = document.getElementsByTagName('script');
+  for (const s of scripts) {
+    if (s.src && s.src.includes('maps.googleapis.com/maps/api/js') && s.src.includes('key=')) {
+      try {
+        const url = new URL(s.src);
+        const k = url.searchParams.get('key');
+        if (k) return k.trim();
+      } catch (_) {}
+    }
+  }
+  return null;
 }
 
-// --- Helper: Fit bounds with left shift (desktop) ---
+/* ---------------- Helpers: layout / padding ---------------- */
+function getSidebarWidth() {
+  const sidebar = document.querySelector(".sidebar-wrapper");
+  return sidebar ? sidebar.offsetWidth : Math.floor(window.innerWidth / 2);
+}
+
 function fitBoundsLeft(bounds) {
   map.fitBounds(bounds, {
     top: 50,
@@ -38,26 +77,155 @@ function fitBoundsLeft(bounds) {
   });
 }
 
-// --- Helper: Fit bounds centered (mobile bottom sheet) ---
 function fitBoundsCentered(bounds) {
   map.fitBounds(bounds, {
     top: 50,
-    bottom: 300, // ✅ leave space for bottom sheet
+    bottom: 300, // leave space for bottom sheet on mobile
     left: 50,
     right: 50
   });
 }
 
-// --- Unified Fit Bounds ---
 function fitBoundsResponsive(bounds) {
-  if (window.innerWidth <= 800) {
-    fitBoundsCentered(bounds); // ✅ mobile → centered
+  if (window.innerWidth <= 800) fitBoundsCentered(bounds);
+  else fitBoundsLeft(bounds);
+}
+
+function applyResponsivePadding() {
+  const padding =
+    window.innerWidth <= 800
+      ? { top: 50, bottom: 300, left: 50, right: 50 }
+      : { top: 50, bottom: 50, left: 50, right: getSidebarWidth() + 50 };
+  map.setOptions({ padding });
+}
+
+function selectionKey(arr) {
+  return arr.map(p => p.name).sort().join("|");
+}
+
+/* ---------------- Helpers: bounds math ---------------- */
+function unionBounds(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const u = new google.maps.LatLngBounds(a.getSouthWest(), a.getNorthEast());
+  u.union(b);
+  return u;
+}
+
+function boundsArea(b) {
+  if (!b) return 0;
+  const sw = b.getSouthWest();
+  const ne = b.getNorthEast();
+  const dLat = Math.max(0, ne.lat() - sw.lat());
+  const dLng = Math.max(0, ne.lng() - sw.lng());
+  return dLat * dLng;
+}
+
+function expandBoundsByMeters(bounds, meters) {
+  if (!bounds || !meters) return bounds;
+
+  const ctr = bounds.getCenter();
+  const lat = ctr.lat();
+  const mPerDegLat = 111320; // ~ meters/degree latitude
+  const mPerDegLng = 111320 * Math.cos((lat * Math.PI) / 180);
+
+  const dLat = meters / mPerDegLat;
+  const dLng = meters / mPerDegLng;
+
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+
+  return new google.maps.LatLngBounds(
+    new google.maps.LatLng(sw.lat() - dLat, sw.lng() - dLng),
+    new google.maps.LatLng(ne.lat() + dLat, ne.lng() + dLng)
+  );
+}
+
+function chooseAndBufferBounds({ routeBounds, markerBounds, mode = 'min', bufferMeters = 0 }) {
+  let chosen;
+  if (routeBounds && markerBounds) {
+    chosen = mode === 'max'
+      ? unionBounds(routeBounds, markerBounds)
+      : (boundsArea(routeBounds) <= boundsArea(markerBounds) ? routeBounds : markerBounds);
   } else {
-    fitBoundsLeft(bounds); // ✅ desktop → left shifted
+    chosen = routeBounds || markerBounds; // whichever exists
+  }
+  return expandBoundsByMeters(chosen, bufferMeters);
+}
+
+/* ---------------- Place IDs (via Places API New) ----------------
+   We request googleMapsPlaceId, which is the one that works in Maps URLs.
+------------------------------------------------------------------*/
+async function getPlaceIdFor(place) {
+  if (place.googleMapsPlaceId) return place.googleMapsPlaceId;
+
+  const API_KEY = getApiKey();
+  if (!API_KEY) {
+    console.warn('Missing API key; falling back to lat/lng for', place.name);
+    return null;
+  }
+
+  const url = "https://places.googleapis.com/v1/places:searchText";
+  const body = {
+    textQuery: place.name,
+    maxResultCount: 1,
+    // Bias to Ahmedabad area to disambiguate
+    locationBias: {
+      circle: {
+        center: { latitude: 23.03, longitude: 72.58 },
+        radius: 30000
+      }
+    }
+  };
+
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": API_KEY,
+        // Ask explicitly for googleMapsPlaceId (the one used in URLs)
+        "X-Goog-FieldMask": "places.googleMapsPlaceId,places.id,places.displayName"
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) throw new Error(`Places search HTTP ${resp.status}`);
+    const data = await resp.json();
+    const p = data?.places?.[0];
+
+    if (p?.googleMapsPlaceId) {
+      place.googleMapsPlaceId = p.googleMapsPlaceId;
+      return place.googleMapsPlaceId;
+    }
+
+    // Optional fallback: if only internal ID returned, try details
+    if (p?.id) {
+      const detailsUrl = `https://places.googleapis.com/v1/places/${encodeURIComponent(p.id)}?fields=googleMapsPlaceId`;
+      const det = await fetch(detailsUrl, { headers: { "X-Goog-Api-Key": API_KEY } });
+      if (det.ok) {
+        const dj = await det.json();
+        if (dj.googleMapsPlaceId) {
+          place.googleMapsPlaceId = dj.googleMapsPlaceId;
+          return place.googleMapsPlaceId;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Place ID lookup failed for", place.name, e);
+  }
+
+  return null; // fall back to lat/lng if not found
+}
+
+async function ensurePlaceIds(arr) {
+  for (const p of arr) {
+    // eslint-disable-next-line no-await-in-loop
+    await getPlaceIdFor(p);
   }
 }
 
-// --- Initialize map ---
+/* ---------------- Initialize map ---------------- */
 function initMap() {
   map = new google.maps.Map(document.getElementById("map"), {
     zoom: 1,
@@ -78,6 +246,7 @@ function initMap() {
   directionsRenderer = new google.maps.DirectionsRenderer({
     map,
     suppressMarkers: true,
+    preserveViewport: true, // we control zoom/fit ourselves
     polylineOptions: { strokeColor: "#9D2C21", strokeWeight: 5 }
   });
 
@@ -99,6 +268,21 @@ function initMap() {
   wrapperDiv.appendChild(controlDiv);
   document.body.appendChild(wrapperDiv);
 
+  // Ensure loader exists if not in HTML
+  if (!document.getElementById("loader")) {
+    const loader = document.createElement("div");
+    loader.id = "loader";
+    loader.style.display = "none";
+    loader.style.position = "absolute";
+    loader.style.inset = "0";
+    loader.style.alignItems = "center";
+    loader.style.justifyContent = "center";
+    loader.style.zIndex = "3";
+    loader.style.background = "rgba(255,255,255,0.45)";
+    loader.innerHTML = `<div style="padding:10px 14px;border-radius:10px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.1);font-weight:600">Computing route…</div>`;
+    document.body.appendChild(loader);
+  }
+
   const placesListDiv = controlDiv.querySelector("#placesList");
 
   // Add markers + checkboxes
@@ -115,7 +299,7 @@ function initMap() {
     cb.type = "checkbox";
     cb.value = i;
     cb.addEventListener("change", (e) => {
-      if (!e.target.checked) marker.setLabel(null);
+      if (!e.target.checked) markers[i].setLabel(null);
     });
 
     label.appendChild(cb);
@@ -123,11 +307,15 @@ function initMap() {
     placesListDiv.appendChild(label);
   });
 
-  // ✅ Fit all markers initially (responsive)
+  // Initial fit (once), then padding-only on resize
   const bounds = new google.maps.LatLngBounds();
   places.forEach((p) => bounds.extend({ lat: p.lat, lng: p.lon }));
-  fitBoundsResponsive(bounds);
+  if (!didInitialFit) {
+    fitBoundsResponsive(bounds);
+    didInitialFit = true;
+  }
   activeBounds = bounds;
+  applyResponsivePadding();
 
   // Footer actions
   const computeBtn = controlDiv.querySelector("#computeBtn");
@@ -155,20 +343,12 @@ function initMap() {
     }
   });
 
-  // ✅ Reapply padding on resize
-  window.addEventListener("resize", () => {
-    if (activeBounds) fitBoundsResponsive(activeBounds);
-  });
-
-  // ✅ Keep markers visible correctly
-  map.addListener("idle", () => {
-    if (activeBounds) fitBoundsResponsive(activeBounds);
-  });
+  // On resize: adjust padding only, never re-fit
+  window.addEventListener("resize", applyResponsivePadding);
 }
 window.initMap = initMap;
 
-
-// --- Distance Matrix in chunks ---
+/* ---------------- Distance matrix + route build (legacy DM OK for now) ---------------- */
 async function getDistanceMatrixChunked(selected) {
   const service = new google.maps.DistanceMatrixService();
   const n = selected.length;
@@ -178,6 +358,7 @@ async function getDistanceMatrixChunked(selected) {
     const origins = [{ lat: selected[i].lat, lng: selected[i].lon }];
     const destinations = selected.map(p => ({ lat: p.lat, lng: p.lon }));
 
+    // eslint-disable-next-line no-await-in-loop
     await new Promise((resolve, reject) => {
       service.getDistanceMatrix(
         { origins, destinations, travelMode: google.maps.TravelMode.DRIVING },
@@ -195,7 +376,6 @@ async function getDistanceMatrixChunked(selected) {
   return matrix;
 }
 
-// --- Nearest-neighbor heuristic ---
 function tspNearestNeighbor(distMatrix) {
   const n = distMatrix.length;
   const visited = new Array(n).fill(false);
@@ -217,18 +397,19 @@ function tspNearestNeighbor(distMatrix) {
   return order;
 }
 
-// --- Distance-based route computation ---
 async function computeRouteByDistance() {
   showLoader(true);
   const selected = [];
   document.querySelectorAll("#placesList input:checked").forEach((cb) => {
-    selected.push(places[parseInt(cb.value)]);
+    selected.push(places[parseInt(cb.value, 10)]);
   });
   if (selected.length < 2) {
     alert("Select at least 2 places.");
     showLoader(false);
     return;
   }
+
+  const selKey = selectionKey(selected);
 
   try {
     const distances = await getDistanceMatrixChunked(selected);
@@ -243,53 +424,91 @@ async function computeRouteByDistance() {
 
     directionsService.route(
       { origin, destination, waypoints, optimizeWaypoints: false, travelMode: google.maps.TravelMode.DRIVING },
-      (result, status) => {
+      async (result, status) => {
         showLoader(false);
         if (status === "OK") {
           directionsRenderer.setDirections(result);
 
-          // Reset markers
+          // Reset marker labels
           markers.forEach(m => m.setLabel(null));
 
-          // Numbered markers with inline text (number + name)
+          // Numbered labels on markers
           orderedPlaces.forEach((p, num) => {
             const markerIndex = places.findIndex(pp => pp.name === p.name);
-
-            markers[markerIndex].setLabel({
-              text: `${num + 1}. ${p.name}`,   // ✅ inline label
-              color: "#fff",
-              fontSize: "12px",
-              fontWeight: "bold"
-            });
-
-            // Optional click popup (just for clarity)
-            markers[markerIndex].addListener("click", () => {
-              const infoWindow = new google.maps.InfoWindow({
-                content: `<strong>${num + 1}. ${p.name}</strong>`
+            if (markerIndex !== -1) {
+              markers[markerIndex].setLabel({
+                text: `${num + 1}. ${p.name}`,
+                color: "#fff",
+                fontSize: "12px",
+                fontWeight: "bold"
               });
-              infoWindow.open(map, markers[markerIndex]);
-            });
+
+              markers[markerIndex].addListener("click", () => {
+                const infoWindow = new google.maps.InfoWindow({
+                  content: `<strong>${num + 1}. ${p.name}</strong>`
+                });
+                infoWindow.open(map, markers[markerIndex]);
+              });
+            }
           });
 
-          // ✅ Update bounds only to selected markers (responsive)
-          const bounds = new google.maps.LatLngBounds();
-          orderedPlaces.forEach((p) => bounds.extend({ lat: p.lat, lng: p.lon }));
-          activeBounds = bounds;
-          fitBoundsResponsive(activeBounds);
+          // A) Route bounds from result (tight to polyline)
+          let routeBounds = null;
+          if (result && result.routes && result.routes[0] && result.routes[0].bounds) {
+            routeBounds = result.routes[0].bounds;
+          }
 
-          // Google Maps link
-          const originStr = `${orderedPlaces[0].lat},${orderedPlaces[0].lon}`;
-          const destStr = `${orderedPlaces.at(-1).lat},${orderedPlaces.at(-1).lon}`;
-          const waypointsStr = orderedPlaces.slice(1, -1).map(p => `${p.lat},${p.lon}`).join("|");
-          let gmapUrl = `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destStr}`;
-          if (waypointsStr) gmapUrl += `&waypoints=${waypointsStr}`;
+          // B) Marker bounds from selected places (covers all stops)
+          const markerBounds = (() => {
+            const b = new google.maps.LatLngBounds();
+            orderedPlaces.forEach((p) => b.extend({ lat: p.lat, lng: p.lon }));
+            return b;
+          })();
+
+          // C) Choose "min" (tighter) or "max" (union), then add buffer in meters
+          const chosen = chooseAndBufferBounds({
+            routeBounds,
+            markerBounds,
+            mode: BOUNDS_MODE,
+            bufferMeters: BOUNDS_BUFFER_M
+          });
+
+          activeBounds = chosen;
+
+          // Zoom/fit: on first route OR if selection changed, refit (zoom in/out). Otherwise keep zoom.
+          if (!didRouteFit || selKey !== lastSelectionKey) {
+            fitBoundsResponsive(activeBounds);
+            didRouteFit = true;
+          } else {
+            applyResponsivePadding();
+          }
+          lastSelectionKey = selKey;
+
+          // 🔗 Build Google Maps link using **googleMapsPlaceId** so names appear
+          await ensurePlaceIds(orderedPlaces);
+
+          const toParam = (p) =>
+            p.googleMapsPlaceId ? `place_id:${p.googleMapsPlaceId}` : `${p.lat},${p.lon}`;
+
+          const originParam = toParam(orderedPlaces[0]);
+          const destParam = toParam(orderedPlaces.at(-1));
+          const waypointsParam = orderedPlaces.slice(1, -1).map(toParam).join("|");
+
+          let gmapUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originParam)}&destination=${encodeURIComponent(destParam)}`;
+          if (waypointsParam) gmapUrl += `&waypoints=${encodeURIComponent(waypointsParam)}`;
           gmapUrl += "&travelmode=driving";
 
           const gmapLink = document.getElementById("gmapLink");
-          gmapLink.href = gmapUrl;
-          gmapLink.style.display = "inline-flex";
+          if (gmapLink) {
+            gmapLink.href = gmapUrl;
+            gmapLink.style.display = "inline-flex";
+          }
+          const footer = document.querySelector(".panel-footer");
+          if (footer) footer.classList.add("computed");
 
-        } else alert("Directions request failed: " + status);
+        } else {
+          alert("Directions request failed: " + status);
+        }
       }
     );
   } catch (err) {
@@ -298,7 +517,8 @@ async function computeRouteByDistance() {
   }
 }
 
-// --- Loader ---
+/* ---------------- Loader ---------------- */
 function showLoader(show) {
-  document.getElementById("loader").style.display = show ? "flex" : "none";
+  const el = document.getElementById("loader");
+  if (el) el.style.display = show ? "flex" : "none";
 }
