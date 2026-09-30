@@ -4,6 +4,8 @@
 /* ---------------- Config ---------------- */
 const BOUNDS_MODE = 'min';      // 'min' = tighter; 'max' = union route/markers
 const BOUNDS_BUFFER_M = 600;    // meters padding around chosen bounds
+const PIN_LABEL_SIZE_SELECTED = '16px';
+const PIN_LABEL_SIZE_ROUTE = '18px';
 
 /** Temporary brand palette on the basemap (Cloud mapId styling disabled while tuning). */
 const ACW_MAP_STYLES = [
@@ -115,7 +117,7 @@ function blackPinIcon() {
   };
 }
 
-function setMarkerVenueLabel(marker, text, fontSize = '11px') {
+function setMarkerVenueLabel(marker, text, fontSize = PIN_LABEL_SIZE_SELECTED) {
   if (!text) {
     marker.setLabel(null);
     return;
@@ -125,6 +127,14 @@ function setMarkerVenueLabel(marker, text, fontSize = '11px') {
     color: '#000000',
     fontSize,
     fontWeight: '500',
+  });
+}
+
+function syncMarkerLabelsFromSelection() {
+  markers.forEach((m, i) => {
+    const cb = document.querySelector(`#placesList input[type="checkbox"][value="${i}"]`);
+    if (cb?.checked) setMarkerVenueLabel(m, places[i].name);
+    else setMarkerVenueLabel(m, null);
   });
 }
 
@@ -213,13 +223,12 @@ function populateFromPlaces() {
       title: p.name,
       icon: blackPinIcon(),
     });
-    setMarkerVenueLabel(marker, p.name);
     markers.push(marker);
 
     const label = document.createElement('label');
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.value = i;
-    cb.addEventListener('change', () => setMarkerVenueLabel(markers[i], p.name));
+    cb.addEventListener('change', syncMarkerLabelsFromSelection);
     label.appendChild(cb);
     const nameSpan = document.createElement('span');
     nameSpan.className = 'venue-name';
@@ -439,12 +448,12 @@ async function computeRouteByDistance() {
 
         directionsRenderer.setDirections(result);
 
-        // Route order labels (name below pin)
-        markers.forEach((m, idx) => setMarkerVenueLabel(m, places[idx].name));
+        // Numbered labels below pin for selected stops only
+        markers.forEach(m => setMarkerVenueLabel(m, null));
         orderedPlaces.forEach((p, num) => {
           const idx = places.findIndex(pp => pp.name === p.name);
           if (idx !== -1) {
-            setMarkerVenueLabel(markers[idx], `${num + 1}. ${p.name}`, '13px');
+            setMarkerVenueLabel(markers[idx], `${num + 1}. ${p.name}`, PIN_LABEL_SIZE_ROUTE);
           }
         });
 

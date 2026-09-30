@@ -52,8 +52,6 @@ html, body {
 #placesList {
   display: flex; flex-direction: column; gap: 8px;
   padding: 6px 10px; overflow-y: auto; margin-top: 18px;
-  background: #CEAD2C;
-  color: #000;
 }
 
 /* WEB (desktop/default) specs:
@@ -64,24 +62,17 @@ html, body {
   display: flex; align-items: center; gap: 8px; cursor: pointer;
   font-size: 20px; font-weight: 500; line-height: 26px;
   padding: 3px 5px; border-radius: 4px;
-  color: #000;
-}
-
-.places-control label:has(input:checked) .venue-name {
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1.2;
 }
 
 .places-control input[type="checkbox"] {
   appearance: none; width: 22.5px; height: 22.5px; flex-shrink: 0;
-  border: 2px solid #000; background: #CEAD2C; margin-right: 6px; position: relative;
+  border: 2px solid #fff; background: #000; margin-right: 6px; position: relative;
 }
-.places-control input[type="checkbox"]:checked { background: #000; border-color: #000; }
+.places-control input[type="checkbox"]:checked { background: #fff; border-color: #fff; }
 .places-control input[type="checkbox"]:checked::after {
   content: ""; position: absolute; top: 50%; left: 50%;
   width: 6px; height: 12px; transform: translate(-50%,-55%) rotate(45deg);
-  border: solid #fff; border-width: 0 3px 3px 0;
+  border: solid #000; border-width: 0 3px 3px 0;
 }
 
 /* ===== Footer default ===== */
@@ -202,7 +193,6 @@ html, body {
 
   .places-control { grid-template-rows: 1fr auto; font-size: 13px; }
   .places-control label { font-size: 16px; font-weight: 500; line-height: 22px; }
-  .places-control label:has(input:checked) .venue-name { font-size: 22px; }
   .places-control input[type="checkbox"] { width: 18px; height: 18px; }
 
   .panel-footer { min-height: 60px !important; }
