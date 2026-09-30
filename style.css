@@ -2,6 +2,7 @@
 html, body {
   height: 100%;
   margin: 0;
+  background: #CEAD2C;
   font-family: 'JetBrains Mono', monospace;
   font-size: 14px; /* smaller base */
 }
@@ -86,14 +87,14 @@ html, body {
 
 /* WEB: compute route font size 18px (medium) */
 #computeBtn {
-  background: #18467D; color: #fff;
+  background: #509277; color: #fff;
   font-weight: 500; font-size: 18px; text-transform: uppercase;
   height: 36px; line-height: 36px;
   border: none; border-radius: 20px; cursor: pointer;
   width: 100%; padding: 0;
   transition: background .3s ease-in-out;
 }
-#computeBtn:hover { background: #163a6c; }
+#computeBtn:hover { background: #458068; }
 #computeBtn:disabled { background: #999; cursor: not-allowed; }
 
 /* Hidden initially */

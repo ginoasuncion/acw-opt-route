@@ -5,6 +5,16 @@
 const BOUNDS_MODE = 'min';      // 'min' = tighter; 'max' = union route/markers
 const BOUNDS_BUFFER_M = 600;    // meters padding around chosen bounds
 
+/** Temporary brand palette on the basemap (Cloud mapId styling disabled while tuning). */
+const ACW_MAP_STYLES = [
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#2B7787' }] },
+  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
+  { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
+];
+
 /* ---------------- State ---------------- */
 let places = []; // filled from CSV
 let map, directionsService, directionsRenderer;
@@ -196,7 +206,7 @@ function initMap() {
     mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
     zoomControl: false, panControl: false, rotateControl: false, scaleControl: false,
     keyboardShortcuts: false,
-    mapId: 'ceb937821bc6d1ab66996a44',
+    styles: ACW_MAP_STYLES,
   });
 
   directionsService = new google.maps.DirectionsService();
