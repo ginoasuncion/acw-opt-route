@@ -96,7 +96,36 @@ async function loadPlacesFromCsvUrl(url) {
   const text = await resp.text();
   const rows = parseCSV(text);
   const mapped = rows.map(mapCsvRowToPlace).filter(Boolean);
-  return mapped;
+  return sortPlacesByName(mapped);
+}
+
+function sortPlacesByName(arr) {
+  return [...arr].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+}
+
+function blackPinIcon() {
+  return {
+    path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
+    fillColor: '#000000',
+    fillOpacity: 1,
+    strokeWeight: 0,
+    scale: 1.45,
+    anchor: new google.maps.Point(12, 22),
+    labelOrigin: new google.maps.Point(12, 42),
+  };
+}
+
+function setMarkerVenueLabel(marker, text, fontSize = '11px') {
+  if (!text) {
+    marker.setLabel(null);
+    return;
+  }
+  marker.setLabel({
+    text,
+    color: '#000000',
+    fontSize,
+    fontWeight: '500',
+  });
 }
 
 /* ---------------- Layout helpers ---------------- */
@@ -178,15 +207,24 @@ function populateFromPlaces() {
   }
 
   places.forEach((p, i) => {
-    const marker = new google.maps.Marker({ position: { lat: p.lat, lng: p.lon }, map, title: p.name });
+    const marker = new google.maps.Marker({
+      position: { lat: p.lat, lng: p.lon },
+      map,
+      title: p.name,
+      icon: blackPinIcon(),
+    });
+    setMarkerVenueLabel(marker, p.name);
     markers.push(marker);
 
     const label = document.createElement('label');
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.value = i;
-    cb.addEventListener('change', e => { if (!e.target.checked) markers[i].setLabel(null); });
+    cb.addEventListener('change', () => setMarkerVenueLabel(markers[i], p.name));
     label.appendChild(cb);
-    label.appendChild(document.createTextNode(' ' + p.name));
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'venue-name';
+    nameSpan.textContent = p.name;
+    label.appendChild(nameSpan);
     list.appendChild(label);
   });
 
@@ -212,7 +250,7 @@ function initMap() {
   directionsService = new google.maps.DirectionsService();
   directionsRenderer = new google.maps.DirectionsRenderer({
     map, suppressMarkers: true, preserveViewport: true,
-    polylineOptions: { strokeColor: '#9D2C21', strokeWeight: 5 }
+    polylineOptions: { strokeColor: '#000000', strokeWeight: 5 }
   });
 
   // Sidebar (silent auto-load; fallback to file picker)
@@ -304,7 +342,7 @@ function enableFallbackPicker(root) {
       try {
         const rows = parseCSV(String(reader.result || ''));
         const mapped = rows.map(mapCsvRowToPlace).filter(Boolean);
-        places = mapped;
+        places = sortPlacesByName(mapped);
         didRouteFit = false;
         lastSelectionKey = null;
         populateFromPlaces();
@@ -401,12 +439,12 @@ async function computeRouteByDistance() {
 
         directionsRenderer.setDirections(result);
 
-        // Label markers
-        markers.forEach(m => m.setLabel(null));
+        // Route order labels (name below pin)
+        markers.forEach((m, idx) => setMarkerVenueLabel(m, places[idx].name));
         orderedPlaces.forEach((p, num) => {
           const idx = places.findIndex(pp => pp.name === p.name);
           if (idx !== -1) {
-            markers[idx].setLabel({ text: `${num + 1}. ${p.name}`, color: '#fff', fontSize: '12px', fontWeight: 'bold' });
+            setMarkerVenueLabel(markers[idx], `${num + 1}. ${p.name}`, '13px');
           }
         });
 
