@@ -218,6 +218,18 @@ html, body {
 }
 .debug-grid div { background: rgba(128,0,128,0.4); }
 
+/* Venue name labels above route line and other markers */
+.venue-marker-label {
+  position: relative;
+  z-index: 1000000 !important;
+  text-shadow:
+    -1px -1px 0 #fff,
+    1px -1px 0 #fff,
+    -1px 1px 0 #fff,
+    1px 1px 0 #fff,
+    0 0 4px #fff;
+}
+
 /* Hide Google UI controls */
 .gm-style .gm-control-active { display: none !important; }
 .gm-style-cc { right: 12px !important; }

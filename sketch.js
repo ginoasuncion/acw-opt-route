@@ -128,6 +128,15 @@ function sortPlacesByName(arr) {
 
 const PIN_ASSETS = { default: 'Default pin.png', selected: 'Selected pin.png' };
 const PIN_DISPLAY_W = 24;
+const MARKER_Z_DEFAULT = 10;
+const ROUTE_POLYLINE_Z = 1;
+
+function labeledMarkerZIndex() {
+  if (typeof google !== 'undefined' && google.maps?.Marker?.MAX_ZINDEX != null) {
+    return google.maps.Marker.MAX_ZINDEX;
+  }
+  return 1_000_000;
+}
 const PIN_NATIVE_SIZE = {
   [PIN_ASSETS.default]: { w: 200, h: 200 },
   [PIN_ASSETS.selected]: { w: 200, h: 258 },
@@ -156,6 +165,7 @@ function selectedPinIcon() {
 function setMarkerVenueLabel(marker, text, fontSize = PIN_LABEL_SIZE_SELECTED) {
   if (!text) {
     marker.setLabel(null);
+    marker.setZIndex(MARKER_Z_DEFAULT);
     return;
   }
   marker.setLabel({
@@ -163,7 +173,9 @@ function setMarkerVenueLabel(marker, text, fontSize = PIN_LABEL_SIZE_SELECTED) {
     color: '#000000',
     fontSize,
     fontWeight: '500',
+    className: 'venue-marker-label',
   });
+  marker.setZIndex(labeledMarkerZIndex());
 }
 
 function setComputeBtnMode(mode) {
@@ -282,6 +294,8 @@ function populateFromPlaces() {
       map,
       title: p.name,
       icon: defaultPinIcon(),
+      optimized: false,
+      zIndex: MARKER_Z_DEFAULT,
     });
     markers.push(marker);
 
@@ -319,7 +333,7 @@ function initMap() {
   directionsService = new google.maps.DirectionsService();
   directionsRenderer = new google.maps.DirectionsRenderer({
     map, suppressMarkers: true, preserveViewport: true,
-    polylineOptions: { strokeColor: '#000000', strokeWeight: 5 }
+    polylineOptions: { strokeColor: '#000000', strokeWeight: 5, zIndex: ROUTE_POLYLINE_Z }
   });
 
   // Sidebar (silent auto-load; fallback to file picker)
