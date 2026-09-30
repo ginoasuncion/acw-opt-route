@@ -218,6 +218,19 @@ html, body {
 }
 .debug-grid div { background: rgba(128,0,128,0.4); }
 
+/* Ahmedabad only — styled like default Google city labels */
+.map-city-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+  font-family: Roboto, Arial, sans-serif !important;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: #5f6368;
+  z-index: 2;
+}
+
 /* Venue name labels (collision-aware overlay layer) */
 .venue-labels-layer {
   position: absolute;
