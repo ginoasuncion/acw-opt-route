@@ -38,7 +38,12 @@ const ACW_MAP_STYLES = [
 ];
 
 /** Only basemap place name (Google JSON cannot show one locality only). */
-const CITY_MAP_LABEL = { text: 'Ahmedabad', lat: 23.025, lng: 72.535 };
+const CITY_MAP_LABEL = {
+  en: 'Ahmedabad',
+  gu: 'અમદાવાદ',
+  lat: 23.025,
+  lng: 72.535,
+};
 
 /* ---------------- State ---------------- */
 let places = []; // filled from CSV
@@ -293,7 +298,15 @@ function createCityLabelOverlay(mapInstance) {
   overlay.onAdd = function onAdd() {
     this.el = document.createElement('div');
     this.el.className = 'map-city-label';
-    this.el.textContent = CITY_MAP_LABEL.text;
+    const en = document.createElement('div');
+    en.className = 'map-city-label__en';
+    en.textContent = CITY_MAP_LABEL.en;
+    const gu = document.createElement('div');
+    gu.className = 'map-city-label__gu';
+    gu.textContent = CITY_MAP_LABEL.gu;
+    this.el.append(en, gu);
+    this.enEl = en;
+    this.guEl = gu;
     this.getPanes().floatPane.appendChild(this.el);
   };
 
@@ -308,7 +321,17 @@ function createCityLabelOverlay(mapInstance) {
 
     const zoom = mapInstance.getZoom() ?? 12;
     this.el.style.display = zoom < 9 ? 'none' : 'block';
-    this.el.style.fontSize = `${Math.round(Math.max(13, Math.min(24, 8 + zoom * 1.15)))}px`;
+    const enSize = Math.round(Math.max(20, Math.min(44, 4 + zoom * 2.05)));
+    const guSize = Math.round(enSize * 0.68);
+    const stroke = Math.max(2.5, enSize * 0.085);
+    if (this.enEl) {
+      this.enEl.style.fontSize = `${enSize}px`;
+      this.enEl.style.webkitTextStroke = `${stroke}px #ffffff`;
+    }
+    if (this.guEl) {
+      this.guEl.style.fontSize = `${guSize}px`;
+      this.guEl.style.webkitTextStroke = `${Math.max(2, stroke * 0.9)}px #ffffff`;
+    }
     this.el.style.left = `${point.x}px`;
     this.el.style.top = `${point.y}px`;
   };

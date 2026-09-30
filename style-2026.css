@@ -218,17 +218,28 @@ html, body {
 }
 .debug-grid div { background: rgba(128,0,128,0.4); }
 
-/* Ahmedabad only — styled like default Google city labels */
+/* Ahmedabad only — bilingual city label (Google Maps locality style) */
 .map-city-label {
   position: absolute;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  white-space: nowrap;
-  font-family: Roboto, Arial, sans-serif !important;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  color: #5f6368;
+  text-align: center;
+  line-height: 1.02;
   z-index: 2;
+}
+
+.map-city-label__en,
+.map-city-label__gu {
+  font-family: Roboto, Arial, sans-serif !important;
+  font-weight: 700;
+  color: rgba(30, 30, 30, 0.92);
+  paint-order: stroke fill;
+  letter-spacing: 0.015em;
+  white-space: nowrap;
+}
+
+.map-city-label__gu {
+  margin-top: 0.08em;
 }
 
 /* Venue name labels (collision-aware overlay layer) */
