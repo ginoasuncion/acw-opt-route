@@ -236,12 +236,19 @@ html, body {
   color: #000;
   white-space: nowrap;
   line-height: 1.2;
+  transition: transform 0.15s ease, font-size 0.15s ease;
   text-shadow:
     -1px -1px 0 #fff,
     1px -1px 0 #fff,
     -1px 1px 0 #fff,
     1px 1px 0 #fff,
     0 0 4px #fff;
+}
+
+.venue-label-overlay--hover {
+  transform: scale(1.12);
+  transform-origin: center top;
+  z-index: 1000001;
 }
 
 /* Hide Google UI controls */

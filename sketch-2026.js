@@ -35,6 +35,8 @@ const ACW_MAP_STYLES = [
   { featureType: 'all', elementType: 'labels', stylers: [{ visibility: 'off' }] },
   { featureType: 'all', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
   { featureType: 'all', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+  // City name (e.g. Ahmedabad), like the legacy Cloud map style
+  { featureType: 'administrative.locality', elementType: 'labels.text', stylers: [{ visibility: 'on' }] },
 ];
 
 /* ---------------- State ---------------- */
@@ -48,6 +50,8 @@ let didRouteFit = false;
 let lastSelectionKey = null;
 let computeBtnMode = 'compute'; // 'compute' | 'reset'
 let venueLabelsOverlay = null;
+let hoveredVenueIndex = null;
+const HOVER_LABEL_PRIORITY = 10_000;
 
 const LABEL_LAYOUT_SLOTS = [
   { dx: 0, dy: 10, originX: 'center', originY: 'top' },
@@ -231,9 +235,10 @@ function createVenueLabelsOverlay(mapInstance) {
       for (const slot of LABEL_LAYOUT_SLOTS) {
         const el = document.createElement('div');
         el.className = 'venue-marker-label venue-label-overlay';
+        if (item.hover) el.classList.add('venue-label-overlay--hover');
         el.textContent = item.text;
         el.style.fontSize = item.fontSize;
-        el.style.fontWeight = '500';
+        el.style.fontWeight = item.hover ? '700' : '500';
         el.style.visibility = 'hidden';
         this.layer.appendChild(el);
 
@@ -241,7 +246,7 @@ function createVenueLabelsOverlay(mapInstance) {
         const h = el.offsetHeight;
         const rect = labelSlotPosition(point, w, h, slot);
 
-        const hits = placed.some(p => labelRectsCollide(rect, p));
+        const hits = !item.hover && placed.some(p => labelRectsCollide(rect, p));
         if (hits) {
           el.remove();
           continue;
@@ -254,8 +259,20 @@ function createVenueLabelsOverlay(mapInstance) {
         shown = true;
         break;
       }
-      if (!shown) {
-        // Lower-priority labels skip when no slot is free
+      if (!shown && item.hover) {
+        const slot = LABEL_LAYOUT_SLOTS[0];
+        const el = document.createElement('div');
+        el.className = 'venue-marker-label venue-label-overlay venue-label-overlay--hover';
+        el.textContent = item.text;
+        el.style.fontSize = item.fontSize;
+        el.style.fontWeight = '700';
+        this.layer.appendChild(el);
+        const w = el.offsetWidth;
+        const h = el.offsetHeight;
+        const rect = labelSlotPosition(point, w, h, slot);
+        el.style.left = `${rect.left}px`;
+        el.style.top = `${rect.top}px`;
+        placed.push(rect);
       }
     }
   };
@@ -269,20 +286,38 @@ function createVenueLabelsOverlay(mapInstance) {
   return overlay;
 }
 
+function setHoveredVenue(index) {
+  hoveredVenueIndex = index;
+  rebuildVenueLabelOverlay();
+}
+
 function rebuildVenueLabelOverlay() {
   if (!venueLabelsOverlay) return;
   const items = [];
-  markers.forEach((m) => {
-    const meta = m.__labelMeta;
-    if (!meta?.text) return;
+  markers.forEach((m, i) => {
     const pos = m.getPosition();
     if (!pos) return;
-    items.push({
-      latLng: pos,
-      text: meta.text,
-      fontSize: meta.fontSize,
-      priority: meta.priority,
-    });
+    const meta = m.__labelMeta;
+    const isHover = hoveredVenueIndex === i;
+    if (meta?.text) {
+      items.push({
+        latLng: pos,
+        text: meta.text,
+        fontSize: isHover ? PIN_LABEL_SIZE_ROUTE : meta.fontSize,
+        priority: isHover ? HOVER_LABEL_PRIORITY + meta.priority : meta.priority,
+        hover: isHover,
+      });
+      return;
+    }
+    if (isHover) {
+      items.push({
+        latLng: pos,
+        text: places[i].name,
+        fontSize: PIN_LABEL_SIZE_ROUTE,
+        priority: HOVER_LABEL_PRIORITY,
+        hover: true,
+      });
+    }
   });
   venueLabelsOverlay.setItems(items);
 }
@@ -400,6 +435,7 @@ function chooseAndBufferBounds({ routeBounds, markerBounds, mode = 'min', buffer
 function clearMarkers() {
   markers.forEach(m => m.setMap(null));
   markers = [];
+  hoveredVenueIndex = null;
   venueLabelsOverlay?.setItems([]);
 }
 function populateFromPlaces() {
@@ -421,6 +457,8 @@ function populateFromPlaces() {
       optimized: false,
       zIndex: MARKER_Z_DEFAULT,
     });
+    marker.addListener('mouseover', () => setHoveredVenue(i));
+    marker.addListener('mouseout', () => setHoveredVenue(null));
     markers.push(marker);
 
     const label = document.createElement('label');
