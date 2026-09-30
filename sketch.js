@@ -7,7 +7,7 @@ const BOUNDS_BUFFER_M = 600;    // meters padding around chosen bounds
 const PIN_LABEL_SIZE_SELECTED = '16px';
 const PIN_LABEL_SIZE_ROUTE = '18px';
 
-/** Brand palette + no basemap labels (venue text comes from your pins only). */
+/** Brand palette; white roads; minimal landmark labels only. */
 const ACW_MAP_STYLES = [
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#2B7787' }] },
   { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
@@ -15,19 +15,24 @@ const ACW_MAP_STYLES = [
   { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
   { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
   { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#d9c23a' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
 
   { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi.medical', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi.school', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi.government', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi.place_of_worship', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.attraction', stylers: [{ visibility: 'off' }] },
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
 
   { featureType: 'all', elementType: 'labels', stylers: [{ visibility: 'off' }] },
   { featureType: 'all', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
   { featureType: 'all', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+  // Light landmark layer (attractions + major parks)
+  { featureType: 'poi.attraction', elementType: 'labels', stylers: [{ visibility: 'on' }] },
+  { featureType: 'poi.park', elementType: 'labels', stylers: [{ visibility: 'simplified' }] },
 ];
 
 /* ---------------- State ---------------- */
@@ -118,15 +123,37 @@ function sortPlacesByName(arr) {
   return [...arr].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 }
 
-function blackPinIcon() {
+const PIN_PATH = 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z';
+const PIN_SCALE = 1.45;
+
+function pinIconBase() {
   return {
-    path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
-    fillColor: '#000000',
-    fillOpacity: 1,
-    strokeWeight: 0,
-    scale: 1.45,
+    path: PIN_PATH,
+    scale: PIN_SCALE,
     anchor: new google.maps.Point(12, 22),
     labelOrigin: new google.maps.Point(12, 42),
+  };
+}
+
+/** Unselected venue — outline only */
+function hollowPinIcon() {
+  return {
+    ...pinIconBase(),
+    fillColor: '#000000',
+    fillOpacity: 0,
+    strokeColor: '#000000',
+    strokeWeight: 2,
+  };
+}
+
+/** Selected venue — filled */
+function solidPinIcon() {
+  return {
+    ...pinIconBase(),
+    fillColor: '#000000',
+    fillOpacity: 1,
+    strokeColor: '#000000',
+    strokeWeight: 1,
   };
 }
 
@@ -143,10 +170,12 @@ function setMarkerVenueLabel(marker, text, fontSize = PIN_LABEL_SIZE_SELECTED) {
   });
 }
 
-function syncMarkerLabelsFromSelection() {
+function syncMarkersFromSelection() {
   markers.forEach((m, i) => {
     const cb = document.querySelector(`#placesList input[type="checkbox"][value="${i}"]`);
-    if (cb?.checked) setMarkerVenueLabel(m, places[i].name);
+    const selected = !!cb?.checked;
+    m.setIcon(selected ? solidPinIcon() : hollowPinIcon());
+    if (selected) setMarkerVenueLabel(m, places[i].name);
     else setMarkerVenueLabel(m, null);
   });
 }
@@ -234,14 +263,14 @@ function populateFromPlaces() {
       position: { lat: p.lat, lng: p.lon },
       map,
       title: p.name,
-      icon: blackPinIcon(),
+      icon: hollowPinIcon(),
     });
     markers.push(marker);
 
     const label = document.createElement('label');
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.value = i;
-    cb.addEventListener('change', syncMarkerLabelsFromSelection);
+    cb.addEventListener('change', syncMarkersFromSelection);
     label.appendChild(cb);
     const nameSpan = document.createElement('span');
     nameSpan.className = 'venue-name';
@@ -461,11 +490,15 @@ async function computeRouteByDistance() {
 
         directionsRenderer.setDirections(result);
 
-        // Numbered labels below pin for selected stops only
-        markers.forEach(m => setMarkerVenueLabel(m, null));
+        // Solid pins + numbered labels for route stops; hollow for the rest
+        markers.forEach(m => {
+          m.setIcon(hollowPinIcon());
+          setMarkerVenueLabel(m, null);
+        });
         orderedPlaces.forEach((p, num) => {
           const idx = places.findIndex(pp => pp.name === p.name);
           if (idx !== -1) {
+            markers[idx].setIcon(solidPinIcon());
             setMarkerVenueLabel(markers[idx], `${num + 1}. ${p.name}`, PIN_LABEL_SIZE_ROUTE);
           }
         });
