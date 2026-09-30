@@ -17,9 +17,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Replace API key in index.html
+      - name: Replace API key in HTML entrypoints
         run: |
-          sed -i "s|__GOOGLE_MAPS_API_KEY__|${{ secrets.GOOGLE_MAPS_API_KEY }}|g" index.html
+          sed -i "s|__GOOGLE_MAPS_API_KEY__|${{ secrets.GOOGLE_MAPS_API_KEY }}|g" index.html 2026.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

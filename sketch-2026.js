@@ -4,6 +4,38 @@
 /* ---------------- Config ---------------- */
 const BOUNDS_MODE = 'min';      // 'min' = tighter; 'max' = union route/markers
 const BOUNDS_BUFFER_M = 600;    // meters padding around chosen bounds
+const PIN_LABEL_SIZE_SELECTED = '16px';
+const PIN_LABEL_SIZE_ROUTE = '18px';
+
+/** Brand palette; textless basemap; primary highways white, other roads ~50% on land. */
+const LAND_COLOR = '#CEAD2C';
+/** 50% blend of white on LAND_COLOR (Maps JSON has no geometry opacity). */
+const ROAD_SUBTLE = '#E6D696';
+
+const ACW_MAP_STYLES = [
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#2B7787' }] },
+  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: LAND_COLOR }] },
+  { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: LAND_COLOR }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: LAND_COLOR }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: LAND_COLOR }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: LAND_COLOR }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: ROAD_SUBTLE }] },
+  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: ROAD_SUBTLE }] },
+  { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: ROAD_SUBTLE }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+
+  { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.medical', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.school', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.government', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.place_of_worship', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.attraction', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+
+  { featureType: 'all', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  { featureType: 'all', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { featureType: 'all', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+];
 
 /* ---------------- State ---------------- */
 let places = []; // filled from CSV
@@ -14,6 +46,19 @@ let activeBounds = null;
 let didInitialFit = false;
 let didRouteFit = false;
 let lastSelectionKey = null;
+let computeBtnMode = 'compute'; // 'compute' | 'reset'
+let venueLabelsOverlay = null;
+
+const LABEL_LAYOUT_SLOTS = [
+  { dx: 0, dy: 10, originX: 'center', originY: 'top' },
+  { dx: 0, dy: -8, originX: 'center', originY: 'bottom' },
+  { dx: 14, dy: 0, originX: 'left', originY: 'center' },
+  { dx: -14, dy: 0, originX: 'right', originY: 'center' },
+  { dx: 20, dy: 12, originX: 'left', originY: 'top' },
+  { dx: -20, dy: 12, originX: 'right', originY: 'top' },
+  { dx: 0, dy: 22, originX: 'center', originY: 'top' },
+];
+const LABEL_COLLISION_PAD = 6;
 
 /* ---------------- CSV helpers ---------------- */
 function getCsvUrl() {
@@ -86,7 +131,206 @@ async function loadPlacesFromCsvUrl(url) {
   const text = await resp.text();
   const rows = parseCSV(text);
   const mapped = rows.map(mapCsvRowToPlace).filter(Boolean);
-  return mapped;
+  return sortPlacesByName(mapped);
+}
+
+function sortPlacesByName(arr) {
+  return [...arr].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+}
+
+const PIN_ASSETS = { default: 'Default pin.png', selected: 'Selected pin.png' };
+const PIN_DISPLAY_W = 24;
+const MARKER_Z_DEFAULT = 10;
+const ROUTE_POLYLINE_Z = 1;
+
+function labeledMarkerZIndex() {
+  if (typeof google !== 'undefined' && google.maps?.Marker?.MAX_ZINDEX != null) {
+    return google.maps.Marker.MAX_ZINDEX;
+  }
+  return 1_000_000;
+}
+const PIN_NATIVE_SIZE = {
+  [PIN_ASSETS.default]: { w: 200, h: 200 },
+  [PIN_ASSETS.selected]: { w: 200, h: 258 },
+};
+
+function pinIconFromAsset(filename) {
+  const native = PIN_NATIVE_SIZE[filename] || { w: 200, h: 200 };
+  const displayH = Math.round(PIN_DISPLAY_W * (native.h / native.w));
+  const labelBelow = Math.round(7 * (native.h / native.w));
+  return {
+    url: encodeURI(filename),
+    scaledSize: new google.maps.Size(PIN_DISPLAY_W, displayH),
+    anchor: new google.maps.Point(PIN_DISPLAY_W / 2, displayH),
+    labelOrigin: new google.maps.Point(PIN_DISPLAY_W / 2, displayH + labelBelow),
+  };
+}
+
+function defaultPinIcon() {
+  return pinIconFromAsset(PIN_ASSETS.default);
+}
+
+function selectedPinIcon() {
+  return pinIconFromAsset(PIN_ASSETS.selected);
+}
+
+function labelSlotPosition(point, w, h, slot) {
+  let top;
+  switch (slot.originY) {
+    case 'top': top = point.y + slot.dy; break;
+    case 'bottom': top = point.y + slot.dy - h; break;
+    default: top = point.y + slot.dy - h / 2; break;
+  }
+  let left;
+  switch (slot.originX) {
+    case 'center': left = point.x + slot.dx - w / 2; break;
+    case 'left': left = point.x + slot.dx; break;
+    default: left = point.x + slot.dx - w; break;
+  }
+  return { left, top, right: left + w, bottom: top + h };
+}
+
+function labelRectsCollide(a, b, pad = LABEL_COLLISION_PAD) {
+  return !(
+    a.right + pad < b.left
+    || b.right + pad < a.left
+    || a.bottom + pad < b.top
+    || b.bottom + pad < a.top
+  );
+}
+
+function createVenueLabelsOverlay(mapInstance) {
+  const overlay = new google.maps.OverlayView();
+  overlay.items = [];
+
+  overlay.onAdd = function onAdd() {
+    this.layer = document.createElement('div');
+    this.layer.className = 'venue-labels-layer';
+    this.getPanes().floatPane.appendChild(this.layer);
+  };
+
+  overlay.onRemove = function onRemove() {
+    this.layer?.remove();
+    this.layer = null;
+  };
+
+  overlay.draw = function draw() {
+    if (!this.layer) return;
+    const projection = this.getProjection();
+    if (!projection) return;
+
+    this.layer.textContent = '';
+    const placed = [];
+    const sorted = [...this.items].sort((a, b) => b.priority - a.priority);
+
+    for (const item of sorted) {
+      const point = projection.fromLatLngToDivPixel(item.latLng);
+      if (!point) continue;
+
+      let shown = false;
+      for (const slot of LABEL_LAYOUT_SLOTS) {
+        const el = document.createElement('div');
+        el.className = 'venue-marker-label venue-label-overlay';
+        el.textContent = item.text;
+        el.style.fontSize = item.fontSize;
+        el.style.fontWeight = '500';
+        el.style.visibility = 'hidden';
+        this.layer.appendChild(el);
+
+        const w = el.offsetWidth;
+        const h = el.offsetHeight;
+        const rect = labelSlotPosition(point, w, h, slot);
+
+        const hits = placed.some(p => labelRectsCollide(rect, p));
+        if (hits) {
+          el.remove();
+          continue;
+        }
+
+        el.style.left = `${rect.left}px`;
+        el.style.top = `${rect.top}px`;
+        el.style.visibility = 'visible';
+        placed.push(rect);
+        shown = true;
+        break;
+      }
+      if (!shown) {
+        // Lower-priority labels skip when no slot is free
+      }
+    }
+  };
+
+  overlay.setItems = function setItems(items) {
+    this.items = items;
+    this.draw();
+  };
+
+  overlay.setMap(mapInstance);
+  return overlay;
+}
+
+function rebuildVenueLabelOverlay() {
+  if (!venueLabelsOverlay) return;
+  const items = [];
+  markers.forEach((m) => {
+    const meta = m.__labelMeta;
+    if (!meta?.text) return;
+    const pos = m.getPosition();
+    if (!pos) return;
+    items.push({
+      latLng: pos,
+      text: meta.text,
+      fontSize: meta.fontSize,
+      priority: meta.priority,
+    });
+  });
+  venueLabelsOverlay.setItems(items);
+}
+
+function setMarkerVenueLabel(marker, text, fontSize = PIN_LABEL_SIZE_SELECTED, priority = 100) {
+  if (!text) {
+    marker.__labelMeta = null;
+    marker.setLabel(null);
+    marker.setZIndex(MARKER_Z_DEFAULT);
+    rebuildVenueLabelOverlay();
+    return;
+  }
+  marker.__labelMeta = { text, fontSize, priority };
+  marker.setLabel(null);
+  marker.setZIndex(labeledMarkerZIndex());
+  rebuildVenueLabelOverlay();
+}
+
+function setComputeBtnMode(mode) {
+  computeBtnMode = mode;
+  const btn = document.getElementById('computeBtn');
+  if (!btn) return;
+  btn.textContent = mode === 'reset' ? 'RESET' : 'COMPUTE ROUTE';
+}
+
+function resetRouteState() {
+  if (directionsRenderer) directionsRenderer.setDirections({ routes: [] });
+  document.querySelectorAll('#placesList input:checked').forEach(cb => { cb.checked = false; });
+  syncMarkersFromSelection();
+  const gmap = document.getElementById('gmapLink');
+  if (gmap) gmap.href = '#';
+  const footer = document.querySelector('.panel-footer');
+  if (footer) footer.classList.remove('computed');
+  hasExpanded = false;
+  didRouteFit = false;
+  lastSelectionKey = null;
+  if (activeBounds) fitBoundsResponsive(activeBounds);
+  setComputeBtnMode('compute');
+}
+
+function syncMarkersFromSelection() {
+  markers.forEach((m, i) => {
+    const cb = document.querySelector(`#placesList input[type="checkbox"][value="${i}"]`);
+    const selected = !!cb?.checked;
+    m.setIcon(selected ? selectedPinIcon() : defaultPinIcon());
+    if (selected) setMarkerVenueLabel(m, places[i].name, PIN_LABEL_SIZE_SELECTED, 500 - i);
+    else setMarkerVenueLabel(m, null);
+  });
 }
 
 /* ---------------- Layout helpers ---------------- */
@@ -156,6 +400,7 @@ function chooseAndBufferBounds({ routeBounds, markerBounds, mode = 'min', buffer
 function clearMarkers() {
   markers.forEach(m => m.setMap(null));
   markers = [];
+  venueLabelsOverlay?.setItems([]);
 }
 function populateFromPlaces() {
   const list = document.getElementById('placesList');
@@ -168,15 +413,25 @@ function populateFromPlaces() {
   }
 
   places.forEach((p, i) => {
-    const marker = new google.maps.Marker({ position: { lat: p.lat, lng: p.lon }, map, title: p.name });
+    const marker = new google.maps.Marker({
+      position: { lat: p.lat, lng: p.lon },
+      map,
+      title: p.name,
+      icon: defaultPinIcon(),
+      optimized: false,
+      zIndex: MARKER_Z_DEFAULT,
+    });
     markers.push(marker);
 
     const label = document.createElement('label');
     const cb = document.createElement('input');
     cb.type = 'checkbox'; cb.value = i;
-    cb.addEventListener('change', e => { if (!e.target.checked) markers[i].setLabel(null); });
+    cb.addEventListener('change', syncMarkersFromSelection);
     label.appendChild(cb);
-    label.appendChild(document.createTextNode(' ' + p.name));
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'venue-name';
+    nameSpan.textContent = p.name;
+    label.appendChild(nameSpan);
     list.appendChild(label);
   });
 
@@ -196,14 +451,17 @@ function initMap() {
     mapTypeControl: false, fullscreenControl: false, streetViewControl: false,
     zoomControl: false, panControl: false, rotateControl: false, scaleControl: false,
     keyboardShortcuts: false,
-    mapId: 'ceb937821bc6d1ab66996a44',
+    styles: ACW_MAP_STYLES,
   });
 
   directionsService = new google.maps.DirectionsService();
   directionsRenderer = new google.maps.DirectionsRenderer({
     map, suppressMarkers: true, preserveViewport: true,
-    polylineOptions: { strokeColor: '#9D2C21', strokeWeight: 5 }
+    polylineOptions: { strokeColor: '#000000', strokeWeight: 5, zIndex: ROUTE_POLYLINE_Z }
   });
+
+  venueLabelsOverlay = createVenueLabelsOverlay(map);
+  map.addListener('idle', () => venueLabelsOverlay?.draw());
 
   // Sidebar (silent auto-load; fallback to file picker)
   const controlDiv = document.createElement('div');
@@ -265,8 +523,12 @@ function initMap() {
   const footer = controlDiv.querySelector('.panel-footer');
 
   computeBtn.addEventListener('click', async () => {
-    await computeRouteByDistance();
-    if (!hasExpanded) { footer.classList.add('computed'); hasExpanded = true; }
+    if (computeBtnMode === 'reset') {
+      resetRouteState();
+      return;
+    }
+    const ok = await computeRouteByDistance();
+    if (ok && !hasExpanded) { footer.classList.add('computed'); hasExpanded = true; }
   });
 
   copyLink.addEventListener('click', (e) => {
@@ -294,7 +556,7 @@ function enableFallbackPicker(root) {
       try {
         const rows = parseCSV(String(reader.result || ''));
         const mapped = rows.map(mapCsvRowToPlace).filter(Boolean);
-        places = mapped;
+        places = sortPlacesByName(mapped);
         didRouteFit = false;
         lastSelectionKey = null;
         populateFromPlaces();
@@ -361,7 +623,7 @@ async function computeRouteByDistance() {
   if (selected.length < 2) {
     alert('Select at least 2 places.');
     showLoader(false);
-    return;
+    return false;
   }
 
   const selKey = selectionKey(selected);
@@ -377,26 +639,40 @@ async function computeRouteByDistance() {
       location: { lat: p.lat, lng: p.lon }, stopover: true
     }));
 
-    directionsService.route(
-      {
-        origin,
-        destination,
-        waypoints,
-        optimizeWaypoints: false,
-        travelMode: google.maps.TravelMode.DRIVING // DRIVING
-      },
-      (result, status) => {
-        showLoader(false);
-        if (status !== 'OK') { alert('Directions request failed: ' + status); return; }
+    return await new Promise((resolve) => {
+      directionsService.route(
+        {
+          origin,
+          destination,
+          waypoints,
+          optimizeWaypoints: false,
+          travelMode: google.maps.TravelMode.DRIVING // DRIVING
+        },
+        (result, status) => {
+          showLoader(false);
+          if (status !== 'OK') {
+            alert('Directions request failed: ' + status);
+            resolve(false);
+            return;
+          }
 
-        directionsRenderer.setDirections(result);
+          directionsRenderer.setDirections(result);
 
-        // Label markers
-        markers.forEach(m => m.setLabel(null));
+        // Solid pins + numbered labels for route stops; hollow for the rest
+        markers.forEach(m => {
+          m.setIcon(defaultPinIcon());
+          setMarkerVenueLabel(m, null);
+        });
         orderedPlaces.forEach((p, num) => {
           const idx = places.findIndex(pp => pp.name === p.name);
           if (idx !== -1) {
-            markers[idx].setLabel({ text: `${num + 1}. ${p.name}`, color: '#fff', fontSize: '12px', fontWeight: 'bold' });
+            markers[idx].setIcon(selectedPinIcon());
+            setMarkerVenueLabel(
+              markers[idx],
+              `${num + 1}. ${p.name}`,
+              PIN_LABEL_SIZE_ROUTE,
+              2000 - num
+            );
           }
         });
 
@@ -451,12 +727,16 @@ async function computeRouteByDistance() {
         if (gmapLink) { gmapLink.href = url; gmapLink.style.display = 'inline-flex'; }
         const footer = document.querySelector('.panel-footer');
         if (footer) footer.classList.add('computed');
+        setComputeBtnMode('reset');
+        resolve(true);
         // -----------------------------------------------------------------------------------
-      }
-    );
+        }
+      );
+    });
   } catch (err) {
     showLoader(false);
     alert('Error building distance matrix: ' + err);
+    return false;
   }
 }
 
