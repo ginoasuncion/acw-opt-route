@@ -218,10 +218,24 @@ html, body {
 }
 .debug-grid div { background: rgba(128,0,128,0.4); }
 
-/* Venue name labels above route line and other markers */
-.venue-marker-label {
-  position: relative;
-  z-index: 1000000 !important;
+/* Venue name labels (collision-aware overlay layer) */
+.venue-labels-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 1000000;
+}
+
+.venue-marker-label,
+.venue-label-overlay {
+  position: absolute;
+  color: #000;
+  white-space: nowrap;
+  line-height: 1.2;
   text-shadow:
     -1px -1px 0 #fff,
     1px -1px 0 #fff,

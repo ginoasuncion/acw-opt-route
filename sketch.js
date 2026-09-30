@@ -47,6 +47,18 @@ let didInitialFit = false;
 let didRouteFit = false;
 let lastSelectionKey = null;
 let computeBtnMode = 'compute'; // 'compute' | 'reset'
+let venueLabelsOverlay = null;
+
+const LABEL_LAYOUT_SLOTS = [
+  { dx: 0, dy: 10, originX: 'center', originY: 'top' },
+  { dx: 0, dy: -8, originX: 'center', originY: 'bottom' },
+  { dx: 14, dy: 0, originX: 'left', originY: 'center' },
+  { dx: -14, dy: 0, originX: 'right', originY: 'center' },
+  { dx: 20, dy: 12, originX: 'left', originY: 'top' },
+  { dx: -20, dy: 12, originX: 'right', originY: 'top' },
+  { dx: 0, dy: 22, originX: 'center', originY: 'top' },
+];
+const LABEL_COLLISION_PAD = 6;
 
 /* ---------------- CSV helpers ---------------- */
 function getCsvUrl() {
@@ -162,20 +174,131 @@ function selectedPinIcon() {
   return pinIconFromAsset(PIN_ASSETS.selected);
 }
 
-function setMarkerVenueLabel(marker, text, fontSize = PIN_LABEL_SIZE_SELECTED) {
+function labelSlotPosition(point, w, h, slot) {
+  let top;
+  switch (slot.originY) {
+    case 'top': top = point.y + slot.dy; break;
+    case 'bottom': top = point.y + slot.dy - h; break;
+    default: top = point.y + slot.dy - h / 2; break;
+  }
+  let left;
+  switch (slot.originX) {
+    case 'center': left = point.x + slot.dx - w / 2; break;
+    case 'left': left = point.x + slot.dx; break;
+    default: left = point.x + slot.dx - w; break;
+  }
+  return { left, top, right: left + w, bottom: top + h };
+}
+
+function labelRectsCollide(a, b, pad = LABEL_COLLISION_PAD) {
+  return !(
+    a.right + pad < b.left
+    || b.right + pad < a.left
+    || a.bottom + pad < b.top
+    || b.bottom + pad < a.top
+  );
+}
+
+function createVenueLabelsOverlay(mapInstance) {
+  const overlay = new google.maps.OverlayView();
+  overlay.items = [];
+
+  overlay.onAdd = function onAdd() {
+    this.layer = document.createElement('div');
+    this.layer.className = 'venue-labels-layer';
+    this.getPanes().floatPane.appendChild(this.layer);
+  };
+
+  overlay.onRemove = function onRemove() {
+    this.layer?.remove();
+    this.layer = null;
+  };
+
+  overlay.draw = function draw() {
+    if (!this.layer) return;
+    const projection = this.getProjection();
+    if (!projection) return;
+
+    this.layer.textContent = '';
+    const placed = [];
+    const sorted = [...this.items].sort((a, b) => b.priority - a.priority);
+
+    for (const item of sorted) {
+      const point = projection.fromLatLngToDivPixel(item.latLng);
+      if (!point) continue;
+
+      let shown = false;
+      for (const slot of LABEL_LAYOUT_SLOTS) {
+        const el = document.createElement('div');
+        el.className = 'venue-marker-label venue-label-overlay';
+        el.textContent = item.text;
+        el.style.fontSize = item.fontSize;
+        el.style.fontWeight = '500';
+        el.style.visibility = 'hidden';
+        this.layer.appendChild(el);
+
+        const w = el.offsetWidth;
+        const h = el.offsetHeight;
+        const rect = labelSlotPosition(point, w, h, slot);
+
+        const hits = placed.some(p => labelRectsCollide(rect, p));
+        if (hits) {
+          el.remove();
+          continue;
+        }
+
+        el.style.left = `${rect.left}px`;
+        el.style.top = `${rect.top}px`;
+        el.style.visibility = 'visible';
+        placed.push(rect);
+        shown = true;
+        break;
+      }
+      if (!shown) {
+        // Lower-priority labels skip when no slot is free
+      }
+    }
+  };
+
+  overlay.setItems = function setItems(items) {
+    this.items = items;
+    this.draw();
+  };
+
+  overlay.setMap(mapInstance);
+  return overlay;
+}
+
+function rebuildVenueLabelOverlay() {
+  if (!venueLabelsOverlay) return;
+  const items = [];
+  markers.forEach((m) => {
+    const meta = m.__labelMeta;
+    if (!meta?.text) return;
+    const pos = m.getPosition();
+    if (!pos) return;
+    items.push({
+      latLng: pos,
+      text: meta.text,
+      fontSize: meta.fontSize,
+      priority: meta.priority,
+    });
+  });
+  venueLabelsOverlay.setItems(items);
+}
+
+function setMarkerVenueLabel(marker, text, fontSize = PIN_LABEL_SIZE_SELECTED, priority = 100) {
   if (!text) {
+    marker.__labelMeta = null;
     marker.setLabel(null);
     marker.setZIndex(MARKER_Z_DEFAULT);
+    rebuildVenueLabelOverlay();
     return;
   }
-  marker.setLabel({
-    text,
-    color: '#000000',
-    fontSize,
-    fontWeight: '500',
-    className: 'venue-marker-label',
-  });
+  marker.__labelMeta = { text, fontSize, priority };
+  marker.setLabel(null);
   marker.setZIndex(labeledMarkerZIndex());
+  rebuildVenueLabelOverlay();
 }
 
 function setComputeBtnMode(mode) {
@@ -205,7 +328,7 @@ function syncMarkersFromSelection() {
     const cb = document.querySelector(`#placesList input[type="checkbox"][value="${i}"]`);
     const selected = !!cb?.checked;
     m.setIcon(selected ? selectedPinIcon() : defaultPinIcon());
-    if (selected) setMarkerVenueLabel(m, places[i].name);
+    if (selected) setMarkerVenueLabel(m, places[i].name, PIN_LABEL_SIZE_SELECTED, 500 - i);
     else setMarkerVenueLabel(m, null);
   });
 }
@@ -277,6 +400,7 @@ function chooseAndBufferBounds({ routeBounds, markerBounds, mode = 'min', buffer
 function clearMarkers() {
   markers.forEach(m => m.setMap(null));
   markers = [];
+  venueLabelsOverlay?.setItems([]);
 }
 function populateFromPlaces() {
   const list = document.getElementById('placesList');
@@ -335,6 +459,9 @@ function initMap() {
     map, suppressMarkers: true, preserveViewport: true,
     polylineOptions: { strokeColor: '#000000', strokeWeight: 5, zIndex: ROUTE_POLYLINE_Z }
   });
+
+  venueLabelsOverlay = createVenueLabelsOverlay(map);
+  map.addListener('idle', () => venueLabelsOverlay?.draw());
 
   // Sidebar (silent auto-load; fallback to file picker)
   const controlDiv = document.createElement('div');
@@ -540,7 +667,12 @@ async function computeRouteByDistance() {
           const idx = places.findIndex(pp => pp.name === p.name);
           if (idx !== -1) {
             markers[idx].setIcon(selectedPinIcon());
-            setMarkerVenueLabel(markers[idx], `${num + 1}. ${p.name}`, PIN_LABEL_SIZE_ROUTE);
+            setMarkerVenueLabel(
+              markers[idx],
+              `${num + 1}. ${p.name}`,
+              PIN_LABEL_SIZE_ROUTE,
+              2000 - num
+            );
           }
         });
 
