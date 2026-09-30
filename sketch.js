@@ -7,7 +7,7 @@ const BOUNDS_BUFFER_M = 600;    // meters padding around chosen bounds
 const PIN_LABEL_SIZE_SELECTED = '16px';
 const PIN_LABEL_SIZE_ROUTE = '18px';
 
-/** Temporary brand palette on the basemap (Cloud mapId styling disabled while tuning). */
+/** Brand palette + no basemap labels (venue text comes from your pins only). */
 const ACW_MAP_STYLES = [
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#2B7787' }] },
   { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
@@ -15,6 +15,19 @@ const ACW_MAP_STYLES = [
   { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
   { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
   { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#d9c23a' }] },
+
+  { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.medical', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.school', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.government', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.place_of_worship', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.attraction', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+
+  { featureType: 'all', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  { featureType: 'all', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { featureType: 'all', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
 ];
 
 /* ---------------- State ---------------- */
