@@ -35,9 +35,10 @@ const ACW_MAP_STYLES = [
   { featureType: 'all', elementType: 'labels', stylers: [{ visibility: 'off' }] },
   { featureType: 'all', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
   { featureType: 'all', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
-  // City name (e.g. Ahmedabad), like the legacy Cloud map style
-  { featureType: 'administrative.locality', elementType: 'labels.text', stylers: [{ visibility: 'on' }] },
 ];
+
+/** Sole basemap text: fixed city label (Maps JSON cannot filter to one locality). */
+const CITY_MAP_LABEL = { text: 'Ahmedabad', lat: 23.03, lng: 72.56 };
 
 /* ---------------- State ---------------- */
 let places = []; // filled from CSV
@@ -286,6 +287,37 @@ function createVenueLabelsOverlay(mapInstance) {
   return overlay;
 }
 
+function createCityLabelOverlay(mapInstance) {
+  const overlay = new google.maps.OverlayView();
+
+  overlay.onAdd = function onAdd() {
+    this.el = document.createElement('div');
+    this.el.className = 'map-city-label';
+    this.el.textContent = CITY_MAP_LABEL.text;
+    this.getPanes().floatPane.appendChild(this.el);
+  };
+
+  overlay.draw = function draw() {
+    if (!this.el) return;
+    const projection = this.getProjection();
+    if (!projection) return;
+    const point = projection.fromLatLngToDivPixel(
+      new google.maps.LatLng(CITY_MAP_LABEL.lat, CITY_MAP_LABEL.lng)
+    );
+    if (!point) return;
+    this.el.style.left = `${point.x}px`;
+    this.el.style.top = `${point.y}px`;
+  };
+
+  overlay.onRemove = function onRemove() {
+    this.el?.remove();
+    this.el = null;
+  };
+
+  overlay.setMap(mapInstance);
+  return overlay;
+}
+
 function setHoveredVenue(index) {
   hoveredVenueIndex = index;
   rebuildVenueLabelOverlay();
@@ -499,6 +531,7 @@ function initMap() {
   });
 
   venueLabelsOverlay = createVenueLabelsOverlay(map);
+  createCityLabelOverlay(map);
   map.addListener('idle', () => venueLabelsOverlay?.draw());
 
   // Sidebar (silent auto-load; fallback to file picker)

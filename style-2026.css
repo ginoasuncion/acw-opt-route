@@ -218,6 +218,19 @@ html, body {
 }
 .debug-grid div { background: rgba(128,0,128,0.4); }
 
+/* Single city label on the 2026 basemap (all Google labels hidden) */
+.map-city-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: clamp(18px, 2.2vw, 26px);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: rgba(0, 0, 0, 0.55);
+  z-index: 2;
+}
+
 /* Venue name labels (collision-aware overlay layer) */
 .venue-labels-layer {
   position: absolute;
