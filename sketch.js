@@ -46,6 +46,7 @@ let activeBounds = null;
 let didInitialFit = false;
 let didRouteFit = false;
 let lastSelectionKey = null;
+let computeBtnMode = 'compute'; // 'compute' | 'reset'
 
 /* ---------------- CSV helpers ---------------- */
 function getCsvUrl() {
@@ -126,15 +127,21 @@ function sortPlacesByName(arr) {
 }
 
 const PIN_ASSETS = { default: 'Default pin.png', selected: 'Selected pin.png' };
-const PIN_DISPLAY_W = 48;
-const PIN_DISPLAY_H = Math.round(PIN_DISPLAY_W * (258 / 200));
+const PIN_DISPLAY_W = 24;
+const PIN_NATIVE_SIZE = {
+  [PIN_ASSETS.default]: { w: 200, h: 200 },
+  [PIN_ASSETS.selected]: { w: 200, h: 258 },
+};
 
 function pinIconFromAsset(filename) {
+  const native = PIN_NATIVE_SIZE[filename] || { w: 200, h: 200 };
+  const displayH = Math.round(PIN_DISPLAY_W * (native.h / native.w));
+  const labelBelow = Math.round(7 * (native.h / native.w));
   return {
     url: encodeURI(filename),
-    scaledSize: new google.maps.Size(PIN_DISPLAY_W, PIN_DISPLAY_H),
-    anchor: new google.maps.Point(PIN_DISPLAY_W / 2, PIN_DISPLAY_H),
-    labelOrigin: new google.maps.Point(PIN_DISPLAY_W / 2, PIN_DISPLAY_H + 14),
+    scaledSize: new google.maps.Size(PIN_DISPLAY_W, displayH),
+    anchor: new google.maps.Point(PIN_DISPLAY_W / 2, displayH),
+    labelOrigin: new google.maps.Point(PIN_DISPLAY_W / 2, displayH + labelBelow),
   };
 }
 
@@ -157,6 +164,28 @@ function setMarkerVenueLabel(marker, text, fontSize = PIN_LABEL_SIZE_SELECTED) {
     fontSize,
     fontWeight: '500',
   });
+}
+
+function setComputeBtnMode(mode) {
+  computeBtnMode = mode;
+  const btn = document.getElementById('computeBtn');
+  if (!btn) return;
+  btn.textContent = mode === 'reset' ? 'RESET' : 'COMPUTE ROUTE';
+}
+
+function resetRouteState() {
+  if (directionsRenderer) directionsRenderer.setDirections({ routes: [] });
+  document.querySelectorAll('#placesList input:checked').forEach(cb => { cb.checked = false; });
+  syncMarkersFromSelection();
+  const gmap = document.getElementById('gmapLink');
+  if (gmap) gmap.href = '#';
+  const footer = document.querySelector('.panel-footer');
+  if (footer) footer.classList.remove('computed');
+  hasExpanded = false;
+  didRouteFit = false;
+  lastSelectionKey = null;
+  if (activeBounds) fitBoundsResponsive(activeBounds);
+  setComputeBtnMode('compute');
 }
 
 function syncMarkersFromSelection() {
@@ -353,8 +382,12 @@ function initMap() {
   const footer = controlDiv.querySelector('.panel-footer');
 
   computeBtn.addEventListener('click', async () => {
-    await computeRouteByDistance();
-    if (!hasExpanded) { footer.classList.add('computed'); hasExpanded = true; }
+    if (computeBtnMode === 'reset') {
+      resetRouteState();
+      return;
+    }
+    const ok = await computeRouteByDistance();
+    if (ok && !hasExpanded) { footer.classList.add('computed'); hasExpanded = true; }
   });
 
   copyLink.addEventListener('click', (e) => {
@@ -449,7 +482,7 @@ async function computeRouteByDistance() {
   if (selected.length < 2) {
     alert('Select at least 2 places.');
     showLoader(false);
-    return;
+    return false;
   }
 
   const selKey = selectionKey(selected);
@@ -465,19 +498,24 @@ async function computeRouteByDistance() {
       location: { lat: p.lat, lng: p.lon }, stopover: true
     }));
 
-    directionsService.route(
-      {
-        origin,
-        destination,
-        waypoints,
-        optimizeWaypoints: false,
-        travelMode: google.maps.TravelMode.DRIVING // DRIVING
-      },
-      (result, status) => {
-        showLoader(false);
-        if (status !== 'OK') { alert('Directions request failed: ' + status); return; }
+    return await new Promise((resolve) => {
+      directionsService.route(
+        {
+          origin,
+          destination,
+          waypoints,
+          optimizeWaypoints: false,
+          travelMode: google.maps.TravelMode.DRIVING // DRIVING
+        },
+        (result, status) => {
+          showLoader(false);
+          if (status !== 'OK') {
+            alert('Directions request failed: ' + status);
+            resolve(false);
+            return;
+          }
 
-        directionsRenderer.setDirections(result);
+          directionsRenderer.setDirections(result);
 
         // Solid pins + numbered labels for route stops; hollow for the rest
         markers.forEach(m => {
@@ -543,12 +581,16 @@ async function computeRouteByDistance() {
         if (gmapLink) { gmapLink.href = url; gmapLink.style.display = 'inline-flex'; }
         const footer = document.querySelector('.panel-footer');
         if (footer) footer.classList.add('computed');
+        setComputeBtnMode('reset');
+        resolve(true);
         // -----------------------------------------------------------------------------------
-      }
-    );
+        }
+      );
+    });
   } catch (err) {
     showLoader(false);
     alert('Error building distance matrix: ' + err);
+    return false;
   }
 }
 
