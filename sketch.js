@@ -7,32 +7,34 @@ const BOUNDS_BUFFER_M = 600;    // meters padding around chosen bounds
 const PIN_LABEL_SIZE_SELECTED = '16px';
 const PIN_LABEL_SIZE_ROUTE = '18px';
 
-/** Brand palette; white roads; minimal landmark labels only. */
+/** Brand palette; textless basemap; primary highways white, other roads ~50% on land. */
+const LAND_COLOR = '#CEAD2C';
+/** 50% blend of white on LAND_COLOR (Maps JSON has no geometry opacity). */
+const ROAD_SUBTLE = '#E6D696';
+
 const ACW_MAP_STYLES = [
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#2B7787' }] },
-  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
-  { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#CEAD2C' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: LAND_COLOR }] },
+  { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: LAND_COLOR }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: LAND_COLOR }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: LAND_COLOR }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: LAND_COLOR }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: ROAD_SUBTLE }] },
+  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: ROAD_SUBTLE }] },
+  { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: ROAD_SUBTLE }] },
   { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
 
   { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi.medical', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi.school', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi.government', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi.place_of_worship', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.attraction', stylers: [{ visibility: 'off' }] },
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
 
   { featureType: 'all', elementType: 'labels', stylers: [{ visibility: 'off' }] },
   { featureType: 'all', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
   { featureType: 'all', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
-  // Light landmark layer (attractions + major parks)
-  { featureType: 'poi.attraction', elementType: 'labels', stylers: [{ visibility: 'on' }] },
-  { featureType: 'poi.park', elementType: 'labels', stylers: [{ visibility: 'simplified' }] },
 ];
 
 /* ---------------- State ---------------- */
@@ -123,38 +125,25 @@ function sortPlacesByName(arr) {
   return [...arr].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 }
 
-const PIN_PATH = 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z';
-const PIN_SCALE = 1.45;
+const PIN_ASSETS = { default: 'Default pin.png', selected: 'Selected pin.png' };
+const PIN_DISPLAY_W = 48;
+const PIN_DISPLAY_H = Math.round(PIN_DISPLAY_W * (258 / 200));
 
-function pinIconBase() {
+function pinIconFromAsset(filename) {
   return {
-    path: PIN_PATH,
-    scale: PIN_SCALE,
-    anchor: new google.maps.Point(12, 22),
-    labelOrigin: new google.maps.Point(12, 42),
+    url: encodeURI(filename),
+    scaledSize: new google.maps.Size(PIN_DISPLAY_W, PIN_DISPLAY_H),
+    anchor: new google.maps.Point(PIN_DISPLAY_W / 2, PIN_DISPLAY_H),
+    labelOrigin: new google.maps.Point(PIN_DISPLAY_W / 2, PIN_DISPLAY_H + 14),
   };
 }
 
-/** Unselected venue — outline only */
-function hollowPinIcon() {
-  return {
-    ...pinIconBase(),
-    fillColor: '#000000',
-    fillOpacity: 0,
-    strokeColor: '#000000',
-    strokeWeight: 2,
-  };
+function defaultPinIcon() {
+  return pinIconFromAsset(PIN_ASSETS.default);
 }
 
-/** Selected venue — filled */
-function solidPinIcon() {
-  return {
-    ...pinIconBase(),
-    fillColor: '#000000',
-    fillOpacity: 1,
-    strokeColor: '#000000',
-    strokeWeight: 1,
-  };
+function selectedPinIcon() {
+  return pinIconFromAsset(PIN_ASSETS.selected);
 }
 
 function setMarkerVenueLabel(marker, text, fontSize = PIN_LABEL_SIZE_SELECTED) {
@@ -174,7 +163,7 @@ function syncMarkersFromSelection() {
   markers.forEach((m, i) => {
     const cb = document.querySelector(`#placesList input[type="checkbox"][value="${i}"]`);
     const selected = !!cb?.checked;
-    m.setIcon(selected ? solidPinIcon() : hollowPinIcon());
+    m.setIcon(selected ? selectedPinIcon() : defaultPinIcon());
     if (selected) setMarkerVenueLabel(m, places[i].name);
     else setMarkerVenueLabel(m, null);
   });
@@ -263,7 +252,7 @@ function populateFromPlaces() {
       position: { lat: p.lat, lng: p.lon },
       map,
       title: p.name,
-      icon: hollowPinIcon(),
+      icon: defaultPinIcon(),
     });
     markers.push(marker);
 
@@ -492,13 +481,13 @@ async function computeRouteByDistance() {
 
         // Solid pins + numbered labels for route stops; hollow for the rest
         markers.forEach(m => {
-          m.setIcon(hollowPinIcon());
+          m.setIcon(defaultPinIcon());
           setMarkerVenueLabel(m, null);
         });
         orderedPlaces.forEach((p, num) => {
           const idx = places.findIndex(pp => pp.name === p.name);
           if (idx !== -1) {
-            markers[idx].setIcon(solidPinIcon());
+            markers[idx].setIcon(selectedPinIcon());
             setMarkerVenueLabel(markers[idx], `${num + 1}. ${p.name}`, PIN_LABEL_SIZE_ROUTE);
           }
         });
